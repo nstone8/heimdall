@@ -31,7 +31,7 @@ def detect_ridges(vid_path,device,num_bg=None):
     #get y,x coordinates of corners
     ridges_closed=skimage.morphology.binary_closing(ridges)#,disk(10))
     ridges_skeleton=skimage.morphology.skeletonize(ridges_closed)
-    seg=skimage.measure.label(~ridges_closed,connectivity=1)
+    seg=skimage.measure.label(ridges_closed+1,connectivity=1)
     #remove all objects touching edges
     edge_obj=[]
     edge_obj.extend(seg[0,:])
@@ -42,6 +42,11 @@ def detect_ridges(vid_path,device,num_bg=None):
     for obj in set(edge_obj):
         seg[seg==obj]=0
 
+    seg=skimage.measure.label(seg>0,connectivity=1)
+    
+    #fig,ax=plt.subplots()
+    #ax.imshow(skimage.color.label2rgb(seg))
+    #plt.show()
     #filter out objects smaller than the ridges
     obj_sizes=[(obj,seg[seg==obj].size) for obj in set(seg.ravel()) if obj>0]
     max_size=max([obj_s[1] for obj_s in obj_sizes])
@@ -88,8 +93,6 @@ def detect_ridges(vid_path,device,num_bg=None):
         #'top' corner has lower y value
         top_c=p1 if p1[0]<p2[0] else p2
         top_corners.append(top_c)
-
-    print(top_corners)
 
     #fit a line to top corners to estimate tilt
     popt,pcov=scipy.optimize.curve_fit(lambda x,m,b:[m*this_x+b for this_x in x],[p[1] for p in top_corners],[p[0] for p in top_corners],[0,top_corners[0][0]])
@@ -173,10 +176,11 @@ def maximize_overlap(ridge_mask,device,initial_guess):
     res=scipy.optimize.minimize(lambda x: total_dist(ridge_mask,device.get_mask(initial_guess[0],*x,initial_guess[-1])),initial_guess[1:-1],method='Nelder-Mead')
     return res
 
-def gen_movers(vid_path, num_bg):
+def gen_movers(vid_path, num_bg,otsu_factor=2):
     '''get moving objects in a video'''
-    print('Detecting contrast')
+    print('Extracting background')
     bg=get_background(vid_path,num_bg)
+    print('Detecting contrast')
     thresholds=[]
     for frame in skvideo.io.vreader(vid_path,as_grey=True):
         frame=frame[0,:,:,0]
@@ -185,23 +189,39 @@ def gen_movers(vid_path, num_bg):
         thresholds.append(thresh)
     med_thresh=np.median(thresholds)
     print('Detecting moving objects')
+    frame_count=0
     for frame2 in skvideo.io.vreader(vid_path,as_grey=True):
         frame2=frame2[0,:,:,0]
         diff2=np.abs(frame2-bg)
-        binary=diff2>med_thresh
+        binary=diff2>med_thresh*otsu_factor
+        frame_count+=1
+        print('thresholded frame',frame_count)
         yield binary
 
-def save_vid(frames_iter,path):
+def get_vid_length(vid_path):
+    vid=skvideo.io.vreader(vid_path)
+    num_frames=0
+    for frame in vid:
+        num_frames+=1
+    return num_frames
+def save_movers_vid(frames_iter,path,num_frames,frame_by_frame=False):
     '''save iterable of frames as a video to path
     video must be able to fit in memory'''
     print('Assembling video')
-    first_frame=next(frames_iter)
-    frames=np.zeros((1,*first_frame.shape),first_frame.dtype)
+    first_frame=skimage.color.label2rgb(next(frames_iter))
+    frames=np.zeros((num_frames,*first_frame.shape),first_frame.dtype)
+    frames[0,:,:,:]=first_frame
+    frame_index=1
     for f in frames_iter:
-        old_shape=f.shape
-        new_frame=np.zeros((1,*old_shape),f.dtype)
-        new_frame[0,:,:]=f
-        frames=np.append(frames,new_frame,0)
+        labeled_frame=skimage.color.label2rgb(f)
+        frames[frame_index,:,:,:]=labeled_frame
+        frame_index+=1
+        if frame_by_frame:
+            fig,ax=plt.subplots()
+            ax.imshow(labeled_frame)
+            plt.show()
+            #input('Press enter to show next frame')
+            #plt.close('all')
     print('writing video')
     skvideo.io.vwrite(path,frames)
     
