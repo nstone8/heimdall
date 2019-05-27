@@ -4,6 +4,7 @@ import scipy
 import skimage.filters
 import skimage.feature
 import skimage.morphology
+from skimage.morphology import disk
 import skimage.color
 import skimage.measure
 from matplotlib import pyplot as plt
@@ -64,8 +65,7 @@ def detect_ridges(vid_path,device,num_bg=None):
         this_ridge=np.zeros(seg.shape,seg.dtype)
         y_coords,x_coords=np.where(seg==ridge)
         this_ridge[y_coords,x_coords]=1
-        moment=skimage.measure.moments(this_ridge)
-        ridge_centroid=(moment[1, 0] / moment[0, 0], moment[0, 1] / moment[0, 0])
+        ridge_centroid=get_centroid(this_ridge)
         max_dist=0
         first_corner=None
         for a in zip(y_coords,x_coords):
@@ -176,27 +176,53 @@ def maximize_overlap(ridge_mask,device,initial_guess):
     res=scipy.optimize.minimize(lambda x: total_dist(ridge_mask,device.get_mask(initial_guess[0],*x,initial_guess[-1])),initial_guess[1:-1],method='Nelder-Mead')
     return res
 
-def gen_movers(vid_path, num_bg,otsu_factor=2):
-    '''get moving objects in a video'''
+def gen_movers(vid_path,num_bg,cell_size,min_cell_size=None):
+    '''get moving objects in a video if min_cell_size==None, it will be set to 50% of cell_size
+    all sizes should be in pixels'''
+    if min_cell_size==None:
+        min_cell_size=.5*cell_size
     print('Extracting background')
     bg=get_background(vid_path,num_bg)
     print('Detecting contrast')
-    thresholds=[]
+    max_diff=0
+    max_diff_frame=None
     for frame in skvideo.io.vreader(vid_path,as_grey=True):
+        #detect frame with maximum mean diff, most likely to contain cells
         frame=frame[0,:,:,0]
         diff=np.abs(frame-bg)
-        thresh=skimage.filters.threshold_otsu(diff)
-        thresholds.append(thresh)
-    med_thresh=np.median(thresholds)
+        mean_diff=np.mean(diff)
+        if mean_diff>max_diff:
+            max_diff=mean_diff
+            max_diff_frame=frame
+    #find threshold where mean obj size is closest to cell_size
+    #might be better if we look for max(obj_size)-mean(obj_size) closest to cell_size
+    def get_mean_obj_size(frame,thresh):
+        this_bin=frame>thresh
+        labeled=skimage.measure.label(this_bin)
+        sizes=[]
+        for obj in set(labeled.ravel()):
+            sizes.append(labeled[labeled==obj].size)
+        return np.mean(sizes)
+
+    min_res=scipy.optimize.minimize(lambda thresh: abs(cell_size-get_mean_obj_size(max_diff_frame,thresh)),[skimage.filters.threshold_otsu(max_diff_frame)])
+    optim_thresh=min_res.x[0]
     print('Detecting moving objects')
     frame_count=0
     for frame2 in skvideo.io.vreader(vid_path,as_grey=True):
         frame2=frame2[0,:,:,0]
         diff2=np.abs(frame2-bg)
-        binary=diff2>med_thresh*otsu_factor
+        binary=diff2>optim_thresh
         frame_count+=1
         print('thresholded frame',frame_count)
-        yield binary
+        #delete small objects
+        # labeled_frame=skimage.measure.label(binary)
+        # for obj in set(labeled_frame.ravel()):
+        #     if labeled_frame[labeled_frame==obj].size<min_cell_size:
+        #         labeled_frame[labeled_frame==obj]=0
+
+        binary=skimage.morphology.binary_erosion(binary,disk(int(min_cell_size/2)))
+        binary=skimage.morphology.binary_dilation(binary,disk(int(min_cell_size/2)))
+        yield skimage.measure.label(binary)
 
 def get_vid_length(vid_path):
     vid=skvideo.io.vreader(vid_path)
@@ -204,24 +230,34 @@ def get_vid_length(vid_path):
     for frame in vid:
         num_frames+=1
     return num_frames
+
 def save_movers_vid(frames_iter,path,num_frames,frame_by_frame=False):
     '''save iterable of frames as a video to path
     video must be able to fit in memory'''
     print('Assembling video')
-    first_frame=skimage.color.label2rgb(next(frames_iter))
+    first_frame=skimage.color.label2rgb(next(frames_iter)>0)
     frames=np.zeros((num_frames,*first_frame.shape),first_frame.dtype)
+    print(first_frame.dtype)
     frames[0,:,:,:]=first_frame
     frame_index=1
     for f in frames_iter:
-        labeled_frame=skimage.color.label2rgb(f)
+        f=f>0
+        labeled_frame=skimage.util.img_as_ubyte(skimage.color.label2rgb(f))
         frames[frame_index,:,:,:]=labeled_frame
         frame_index+=1
         if frame_by_frame:
             fig,ax=plt.subplots()
             ax.imshow(labeled_frame)
             plt.show()
-            #input('Press enter to show next frame')
-            #plt.close('all')
+            response=input('Press enter to show next frame, q to stop, or anything else to finish saving\n')
+            if response=='q':
+                raise Exception('STOP')
+            elif response:
+                frame_by_frame=False
+            plt.close('all')
     print('writing video')
     skvideo.io.vwrite(path,frames)
-    
+def get_centroid(obj_mask):
+    moment=skimage.measure.moments(obj_mask)
+    centroid=(moment[1, 0] / moment[0, 0], moment[0, 1] / moment[0, 0])
+    return [int(np.round(p)) for p in centroid]
