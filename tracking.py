@@ -2,8 +2,9 @@ import heimdall.improcessing as imp
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
+import skimage.draw
 
-def get_tracks(movers,time_factor:int=1,max_dist_percentile=99.9,mem=50,debug=False):
+def get_tracks(movers,time_factor:int=10,max_dist_percentile=99.9,mem=None,debug=False):
     time=0
     coords=[]
     for frame in movers:
@@ -32,7 +33,7 @@ def get_tracks(movers,time_factor:int=1,max_dist_percentile=99.9,mem=50,debug=Fa
     points_unlinked_backward=list(points_unprocessed)
     points=[]
     while points_unprocessed:
-        print('Length of points_unprocessed:',len(points_unprocessed))
+        print('Points to link:',len(points_unprocessed))
         reprocess=False
         p=points_unprocessed.pop(0)
         if not p.forward:
@@ -114,7 +115,6 @@ def get_tracks(movers,time_factor:int=1,max_dist_percentile=99.9,mem=50,debug=Fa
     print('Finalizing')
     paths=[]
     while points:
-        print('Length points:',len(points))
         this_path=Path()
         this_point=points[0]
         #rewind to earliest point on path
@@ -193,7 +193,7 @@ class Path:
         x_index=[]
         last_point=self.points[0]
         for point in self.points[1:]:
-            new_y,new_x=skimage.draw.line(*last_point.location,*point.location)
+            new_y,new_x=skimage.draw.line(*last_point.coords[0:2],*point.coords[0:2])
             y_index.extend(new_y)
             x_index.extend(new_x)
             last_point=point
