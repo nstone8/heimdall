@@ -176,7 +176,7 @@ def maximize_overlap(ridge_mask,device,initial_guess):
     res=scipy.optimize.minimize(lambda x: total_dist(ridge_mask,device.get_mask(initial_guess[0],*x,initial_guess[-1])),initial_guess[1:-1],method='Nelder-Mead')
     return res
 
-def gen_movers(vid_path,num_bg,cell_size,min_cell_size=None):
+def gen_movers(vid_path,num_bg,cell_size,min_cell_size=None,debug=False):
     '''get moving objects in a video if min_cell_size==None, it will be set to 50% of cell_size
     all sizes should be in pixels'''
     if min_cell_size==None:
@@ -222,7 +222,19 @@ def gen_movers(vid_path,num_bg,cell_size,min_cell_size=None):
 
         binary=skimage.morphology.binary_erosion(binary,disk(int(min_cell_size/2)))
         binary=skimage.morphology.binary_dilation(binary,disk(int(min_cell_size/2)))
-        yield skimage.measure.label(binary)
+        labeled_binary=skimage.measure.label(binary)
+        if debug:
+            fig,ax=plt.subplots()
+            ax.imshow(skimage.color.label2rgb(labeled_binary))
+            plt.show()
+            response=input('Press enter to show next frame, q to stop, or anything else to finish\n')
+            if response=='q':
+                raise Exception('STOP')
+            elif response:
+                debug=False
+            plt.close('all')
+        
+        yield labeled_binary
 
 def get_vid_length(vid_path):
     vid=skvideo.io.vreader(vid_path)

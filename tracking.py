@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
-def get_tracks(movers,time_factor:int=1,max_dist_percentile=99.9,debug=False):
+def get_tracks(movers,time_factor:int=1,max_dist_percentile=99.9,mem=50,debug=False):
     time=0
     coords=[]
     for frame in movers:
@@ -27,21 +27,55 @@ def get_tracks(movers,time_factor:int=1,max_dist_percentile=99.9,debug=False):
     closest_points=[]
     #find closest point forward and backward in time for each point
     print('Linking paths')
-    points=[Point(c) for c in coords]
-    for p in points:
-        points_after=[point for point in points if p.is_before(point)]
-        points_before=[point for point in points if p.is_after(point)]
-        closest_backward=p.get_closest(points_before)
-        closest_forward=p.get_closest(points_after)
-        if closest_backward:
-            closest_points.append(p.get_dist(closest_backward))
-        if closest_forward:
-            closest_points.append(p.get_dist(closest_forward))
-        p.set_backward(closest_backward)
-        p.set_forward(closest_forward)
+    points_unprocessed=[Point(c) for c in coords]
+    points_unlinked_forward=list(points_unprocessed)
+    points_unlinked_backward=list(points_unprocessed)
+    points=[]
+    while points_unprocessed:
+        print('Length of points_unprocessed:',len(points_unprocessed))
+        reprocess=False
+        p=points_unprocessed.pop(0)
+        if not p.forward:
+            points_after=[point for point in points_unlinked_backward if p.is_before(point,mem)]
+            closest_forward=p.get_closest(points_after)
+            #Check that the point before and point after agree with p that they should be buddies
+            if closest_forward:
+                before_closest_forward=[point for point in points_unlinked_forward if closest_forward.is_after(point,200)]
+                if closest_forward.get_closest(before_closest_forward) is p:
+                    #We agree!
+                    p.set_forward(closest_forward)
+                    closest_forward.set_backward(p)
+                    closest_points.append(p.get_dist(closest_forward))
+                    #mark these guys as together forever
+                    del points_unlinked_forward[points_unlinked_forward.index(p)]
+                    del points_unlinked_backward[points_unlinked_backward.index(closest_forward)]
+                else:
+                    #We don't agree, try again later
+                    reprocess=True
 
+        if not p.backward:
+            points_before=[point for point in points_unlinked_forward if p.is_after(point,mem)]
+            closest_backward=p.get_closest(points_before)
+            #Check that the point before and point after agree with p that they should be buddies
+            if closest_backward:
+                after_closest_backward=[point for point in points_unlinked_backward if closest_backward.is_before(point,mem)]
+                if closest_backward.get_closest(after_closest_backward) is p:
+                    p.set_backward(closest_backward)
+                    closest_backward.set_forward(p)
+                    closest_points.append(p.get_dist(closest_backward))
+                    del points_unlinked_backward[points_unlinked_backward.index(p)]
+                    del points_unlinked_forward[points_unlinked_forward.index(closest_backward)]
+                else:
+                    reprocess=True
+
+        if not reprocess:
+            points.append(p)
+        else:
+            points_unprocessed.append(p)
+                
     print('Trimming paths')
     max_dist=np.percentile([c for c in closest_points if c],max_dist_percentile)
+    print('max_dist:',max_dist)
     #remove links with dist greater than max_dist
     for p in points:
         if p.forward:
@@ -59,6 +93,7 @@ def get_tracks(movers,time_factor:int=1,max_dist_percentile=99.9,debug=False):
         #determine longest 'extra' link and cut it
 
         if len(claims_p_before)>1:
+            print('Intersecting Paths!')
             dists=[p.get_dist(b) for b in claims_p_before]
             indices=list(range(len(dists)))
             #keep shortest link
@@ -67,6 +102,7 @@ def get_tracks(movers,time_factor:int=1,max_dist_percentile=99.9,debug=False):
                 claims_p_before[i].clear_forward()
 
         if len(claims_p_after)>1:
+            print('Intersecting Paths!')
             dists=[p.get_dist(a) for a in claims_p_after]
             indices=list(range(len(dists)))
             #keep shortest link
@@ -105,10 +141,16 @@ class Point:
         self.forward=None
         self.backward=None
 
-    def is_before(self,p:'Point'):
+    def is_before(self,p:'Point',max_time=None):
+        if max_time:
+            if abs(self.coords[2]-p.coords[2])>max_time:
+                return False
         return self.coords[2]<p.coords[2]
 
-    def is_after(self,p:'Point'):
+    def is_after(self,p:'Point',max_time=None):
+        if max_time:
+            if abs(self.coords[2]-p.coords[2])>max_time:
+                return False
         return self.coords[2]>p.coords[2]
 
     def set_backward(self,p:'Point'):
