@@ -3,7 +3,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import skimage
 
-def get_tracks(vid_path:str,num_bg,cell_size,min_cell_size=None,velocity=None,debug=False):
+def get_tracks(vid_path:str,num_bg,cell_size,min_cell_size=None,velocity=None,memory=4,debug=False):
     '''track cells in a video if min_cell_size==None, it will be set to 50% of cell_size, if velocity==None,
     it will be set to 150% cell_size, all args with length units are in pixels'''
     if min_cell_size==None:
@@ -28,7 +28,7 @@ def get_tracks(vid_path:str,num_bg,cell_size,min_cell_size=None,velocity=None,de
         for obj in objs:
             this_obj_mask=frame==obj
             this_obj_location=imp.get_centroid(this_obj_mask)
-            this_point=Point(frame_num,this_obj_location,velocity)
+            this_point=Point(frame_num,this_obj_location,velocity,memory)
             closest_path=None
             closest_path_dist=float('inf')
             for path in paths:
@@ -79,13 +79,14 @@ class Path:
         
 
 class Point:
-    def __init__(self,time:int,location:(int,int),velocity:float):
+    def __init__(self,time:int,location:(int,int),velocity:float,memory:int):
         self.time=time
         self.location=location
         self.velocity=velocity
+        self.memory=memory
 
     def on_same_path(self,p:'Point'):
-        if abs(self.time-p.time)<2 and self.distance_between(p)<self.velocity:
+        if abs(self.time-p.time)<(self.memory+1) and self.distance_between(p)<self.velocity:
             return True
         else:
             return False
