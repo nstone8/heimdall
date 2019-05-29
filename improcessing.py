@@ -305,6 +305,8 @@ class VidIterator:
                 raise Exception("vid_flow_direction must be 'up' or 'left'")
     
             os_handle,new_file_path=tempfile.mkstemp(suffix='.mp4')
+            #close file, we don't work with it directly
+            os.close(os_handle)
             list(os.popen('ffmpeg -y -i {orig_file} {rotate}-f mp4 -crf 0 {new_file}'.format(orig_file=corrected_vid_path,rotate=rotate,new_file=new_file_path)))
             self.vid_path=new_file_path
             self.delete_file=True
