@@ -1,3 +1,5 @@
+import tempfile
+import os
 import skvideo.io
 import numpy as np
 import scipy
@@ -9,9 +11,9 @@ import skimage.color
 import skimage.measure
 from matplotlib import pyplot as plt
 
-def get_background(vid_path,num_bg):
+def get_background(vid,num_bg):
     #take mean of all frames
-    vid=skvideo.io.vreader(vid_path,as_grey=True)
+    vid=iter(vid)
     first_frame=next(vid)[0,:,:,0]
     total=np.zeros(first_frame.shape)
     total+=first_frame
@@ -24,8 +26,7 @@ def get_background(vid_path,num_bg):
     background=total/count
     return background.astype(first_frame.dtype)
 
-def detect_ridges(vid_path,device,num_bg=None):
-    background=get_background(vid_path,num_bg)
+def detect_ridges(background,device):
     sobel=skimage.filters.sobel(background)
     thresh=skimage.filters.threshold_otsu(sobel)
     ridges=sobel>thresh
@@ -176,17 +177,15 @@ def maximize_overlap(ridge_mask,device,initial_guess):
     res=scipy.optimize.minimize(lambda x: total_dist(ridge_mask,device.get_mask(initial_guess[0],*x,initial_guess[-1])),initial_guess[1:-1],method='Nelder-Mead')
     return res
 
-def gen_movers(vid_path,num_bg,cell_size,min_cell_size=None,debug=False):
+def gen_movers(vid,bg,cell_size,min_cell_size=None,debug=False):
     '''get moving objects in a video if min_cell_size==None, it will be set to 50% of cell_size
     all sizes should be in pixels'''
     if min_cell_size==None:
         min_cell_size=.5*cell_size
-    print('Extracting background')
-    bg=get_background(vid_path,num_bg)
     print('Detecting contrast')
     max_diff=0
     max_diff_frame=None
-    for frame in skvideo.io.vreader(vid_path,as_grey=True):
+    for frame in vid:
         #detect frame with maximum mean diff, most likely to contain cells
         frame=frame[0,:,:,0]
         diff=np.abs(frame-bg)
@@ -208,7 +207,7 @@ def gen_movers(vid_path,num_bg,cell_size,min_cell_size=None,debug=False):
     optim_thresh=min_res.x[0]
     print('Detecting moving objects')
     frame_count=0
-    for frame2 in skvideo.io.vreader(vid_path,as_grey=True):
+    for frame2 in vid:
         frame2=frame2[0,:,:,0]
         diff2=np.abs(frame2-bg)
         binary=diff2>optim_thresh
@@ -273,3 +272,37 @@ def get_centroid(obj_mask):
     moment=skimage.measure.moments(obj_mask)
     centroid=(moment[1, 0] / moment[0, 0], moment[0, 1] / moment[0, 0])
     return [int(np.round(p)) for p in centroid]
+
+
+def get_vid_iterator(vid_path):
+    return VidIterator(vid_path)
+
+class VidIterator:
+    '''Iterator to allow multiple scans across a video'''
+    def __init__(self,vid_path):
+        if vid_path.split('.')[-1]=='cine':
+            #This is a cine file, convert to mp4
+            print('Converting .cine file to mp4 (lossless)')
+            #Put escape characters in front of spaces in file name
+            corrected_vid_path=[]
+            for c in vid_path:
+                if c==' ':
+                    corrected_vid_path.append('\\')
+                corrected_vid_path.append(c)
+            corrected_vid_path=''.join(corrected_vid_path)
+            os_handle,new_file_path=tempfile.mkstemp(suffix='.mp4')
+            list(os.popen('ffmpeg -y -i {orig_file} -f mp4 -crf 0 {new_file}'.format(orig_file=corrected_vid_path,new_file=new_file_path)))
+            self.vid_path=new_file_path
+            self.delete_file=True
+            stats=os.stat(new_file_path)
+            if stats.st_size==0:
+                raise Exception('File conversion failed, check that ffmpeg is on PATH')
+        else:
+            self.vid_path=vid_path
+            self.delete_file=False
+    def __iter__(self):
+        return skvideo.io.vreader(self.vid_path,as_grey=True)
+    def __del__(self):
+        #need to delete any temp files when we are destroyed
+        if self.delete_file:
+            os.remove(self.vid_path)

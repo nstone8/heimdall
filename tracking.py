@@ -87,6 +87,7 @@ def get_tracks(movers,time_factor:int=10,max_dist_percentile=99.9,mem=None,debug
                 p.clear_backward()
 
     #check that each point only has one point registering it as a neighbor in each direction. if we have extras, cut the pair with the highest distance
+    #this section can now probably be deleted (double-pairing can no longer happen during linking)
     print('Fixing intersecting paths')
     for p in points:
         claims_p_before=[point for point in points if point.forward is p]
@@ -94,7 +95,7 @@ def get_tracks(movers,time_factor:int=10,max_dist_percentile=99.9,mem=None,debug
         #determine longest 'extra' link and cut it
 
         if len(claims_p_before)>1:
-            print('Intersecting Paths!')
+            raise Exception('Intersecting Paths!')
             dists=[p.get_dist(b) for b in claims_p_before]
             indices=list(range(len(dists)))
             #keep shortest link
@@ -103,7 +104,7 @@ def get_tracks(movers,time_factor:int=10,max_dist_percentile=99.9,mem=None,debug
                 claims_p_before[i].clear_forward()
 
         if len(claims_p_after)>1:
-            print('Intersecting Paths!')
+            raise Exception('Intersecting Paths!')
             dists=[p.get_dist(a) for a in claims_p_after]
             indices=list(range(len(dists)))
             #keep shortest link
