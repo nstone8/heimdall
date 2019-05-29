@@ -1,5 +1,7 @@
 import tempfile
 import os
+import re
+import sys
 import skvideo.io
 import numpy as np
 import scipy
@@ -278,10 +280,10 @@ def get_vid_iterator(vid_path):
     return VidIterator(vid_path)
 
 class VidIterator:
-    '''Iterator to allow multiple scans across a video'''
-    def __init__(self,vid_path):
-        if vid_path.split('.')[-1]=='cine':
-            #This is a cine file, convert to mp4
+    """Iterator to allow multiple scans across a video, vid_flow_direction should be the direction the cells flow, either 'left' or 'up'"""
+    def __init__(self,vid_path,vid_flow_direction='left'):
+        if vid_path.split('.')[-1]=='cine' or vid_flow_direction!='left':
+            #This is a cine file or needs to be rotated, convert to mp4
             print('Converting .cine file to mp4 (lossless)')
             #detect platform so we can correct file paths for ffmpeg
             is_win=re.compile('.*[Ww]in.*')
@@ -295,9 +297,15 @@ class VidIterator:
                         corrected_vid_path.append('\\')
                     corrected_vid_path.append(c)
                 corrected_vid_path=''.join(corrected_vid_path)
-                
+            if vid_flow_direction=='up':
+                rotate='-vf "transpose=2" '
+            elif vid_flow_direction=='left':
+                rotate=''
+            else:
+                raise Exception("vid_flow_direction must be 'up' or 'left'")
+    
             os_handle,new_file_path=tempfile.mkstemp(suffix='.mp4')
-            list(os.popen('ffmpeg -y -i {orig_file} -f mp4 -crf 0 {new_file}'.format(orig_file=corrected_vid_path,new_file=new_file_path)))
+            list(os.popen('ffmpeg -y -i {orig_file} {rotate}-f mp4 -crf 0 {new_file}'.format(orig_file=corrected_vid_path,rotate=rotate,new_file=new_file_path)))
             self.vid_path=new_file_path
             self.delete_file=True
             stats=os.stat(new_file_path)
