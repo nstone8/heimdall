@@ -283,13 +283,19 @@ class VidIterator:
         if vid_path.split('.')[-1]=='cine':
             #This is a cine file, convert to mp4
             print('Converting .cine file to mp4 (lossless)')
-            #Put escape characters in front of spaces in file name
-            corrected_vid_path=[]
-            for c in vid_path:
-                if c==' ':
-                    corrected_vid_path.append('\\')
-                corrected_vid_path.append(c)
-            corrected_vid_path=''.join(corrected_vid_path)
+            #detect platform so we can correct file paths for ffmpeg
+            is_win=re.compile('.*[Ww]in.*')
+            if is_win.match(sys.platform):
+                corrected_vid_path='"'+vid_path+'"'
+            else:
+                #Put escape characters in front of spaces in file name
+                corrected_vid_path=[]
+                for c in vid_path:
+                    if c==' ':
+                        corrected_vid_path.append('\\')
+                    corrected_vid_path.append(c)
+                corrected_vid_path=''.join(corrected_vid_path)
+                
             os_handle,new_file_path=tempfile.mkstemp(suffix='.mp4')
             list(os.popen('ffmpeg -y -i {orig_file} -f mp4 -crf 0 {new_file}'.format(orig_file=corrected_vid_path,new_file=new_file_path)))
             self.vid_path=new_file_path
@@ -298,6 +304,7 @@ class VidIterator:
             if stats.st_size==0:
                 raise Exception('File conversion failed, check that ffmpeg is on PATH')
         else:
+            #Not a cine
             self.vid_path=vid_path
             self.delete_file=False
     def __iter__(self):
