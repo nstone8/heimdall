@@ -44,6 +44,15 @@ class CalibratedDevice:
             ridge_coords[ridge]=[(x,-y) for x,y in ridge_coords[ridge]]
         self.ridge_coords=ridge_coords
 
+    def point_under_ridge(self,point):
+        '''returns None or the index of the ridge this point is under'''
+        ridge_poly=[shapely.geometry.Polygon(points) for points in self.ridge_coords]
+        point_point=shapely.geometry.Point(point)
+        for i in range(len(ridge_poly)):
+            if ridge_poly[i].contains(point_point):
+                return i
+        return None
+    
 def rotate_point(x,y,angle)->(float,float):
     r=np.sqrt((x**2)+(y**2))
     if r==0:

@@ -4,7 +4,21 @@ from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 import skimage.draw
+import shapely
 
+def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num_frames=0,vid_flow_direction='left',num_bg=None,time_factor=10,max_dist_percentile=99,mem=None,debug=False):
+    '''cell_size and min_cell_size should be in microns'''
+    vid=VidIterable(self,vid_path,num_frames=0,vid_flow_direction='left')
+    bg=get_background(vid,num_bg):
+    cal_device=detect_ridges(bg,device)
+    cell_size*=cal_device.scale
+    if min_cell_size:
+        min_cell_size*=cal_device.scale
+    movers=gen_movers(vid,bg,cell_size,min_cell_size,debug)
+    tracks=get_tracks(movers,time_factor,max_dist_percentile,mem,debug)
+    cal_paths=calibrate_paths(paths,cal_device)
+    return cal_paths
+    
 def get_tracks(movers,time_factor:int=10,max_dist_percentile=99,mem=None,debug=False):
     time=0
     coords=[]
@@ -223,7 +237,7 @@ class Path:
             x_index.extend(new_x)
             last_point=point
         return y_index,x_index
-
+    
 class CalibratedPaths:
     def __init__(self,paths,cal_device):
         self.paths=paths
