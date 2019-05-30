@@ -8,17 +8,17 @@ import shapely
 
 def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num_frames=0,vid_flow_direction='left',num_bg=None,time_factor=10,max_dist_percentile=99,mem=None,debug=False):
     '''cell_size and min_cell_size should be in microns'''
-    vid=VidIterable(self,vid_path,num_frames=0,vid_flow_direction='left')
-    bg=get_background(vid,num_bg):
-    cal_device=detect_ridges(bg,device)
+    vid=imp.VidIterable(vid_path,num_frames=0,vid_flow_direction='left')
+    bg=imp.get_background(vid,num_bg)
+    cal_device=imp.detect_ridges(bg,device)
     cell_size*=cal_device.scale
     if min_cell_size:
         min_cell_size*=cal_device.scale
-    movers=gen_movers(vid,bg,cell_size,min_cell_size,debug)
+    movers=imp.gen_movers(vid,bg,cell_size,min_cell_size,debug)
     tracks=get_tracks(movers,time_factor,max_dist_percentile,mem,debug)
     cal_paths=calibrate_paths(paths,cal_device)
     return cal_paths
-    
+
 def get_tracks(movers,time_factor:int=10,max_dist_percentile=99,mem=None,debug=False):
     time=0
     coords=[]
@@ -237,7 +237,7 @@ class Path:
             x_index.extend(new_x)
             last_point=point
         return y_index,x_index
-    
+
 class CalibratedPaths:
     def __init__(self,paths,cal_device):
         self.paths=paths
@@ -250,17 +250,30 @@ def draw_paths(paths:tuple,img_dim):
         img[y_coords,x_coords]=True
     return img
 
-def plot_paths(*cal_paths):
+def plot_paths(*cal_paths,colors=['b', 'g', 'r', 'c', 'm', 'y', 'k']):
+    for i in range(len(colors)):
+        colors[i]+='-'
+    len_ratio=np.ceil(len(cal_paths)/len(colors))
+    colors*=len_ratio
+    #Check for the same device
+    device_ridge_coords=zip([p.cal_device.ridge_coords for p in cal_paths])
+    num_same=0
+    for ridges in device_ridge_coords:
+        for this_ridge in ridges[1:]:
+            if this_ridge!=ridges[0]:
+                break
+        else:
+            num_same+=1
     dev=cal_paths[0].cal_device
     fig,ax=plt.subplots()
-    for ridge in dev.ridge_coords:
+    for ridge in dev.ridge_coords[0:num_same]:
         ridge_x=[r[0] for r in ridge+ridge[0:1]]
         ridge_y=[r[1] for r in ridge+ridge[0:1]]
         ax.plot(ridge_x,ridge_y,'k-')
-
-    for cal_path_group in cal_paths:
+    #only plot up to num_sameth ridge
+    for cal_path_group,color in zip(cal_paths,colors):
         for path in cal_path_group.paths:
             path_x=[p[1] for p in path]
             path_y=[p[0] for p in path]
-            ax.plot(path_x,path_y,'b-')
+            ax.plot(path_x,path_y,color)
     plt.show()
