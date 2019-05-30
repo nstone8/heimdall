@@ -2,6 +2,7 @@ import tempfile
 import os
 import re
 import sys
+import heimdall.device
 import skvideo.io
 import numpy as np
 import scipy
@@ -42,12 +43,12 @@ def detect_ridges(background,device):
     edge_obj.extend(seg[:,0])
     edge_obj.extend(seg[-1,:])
     edge_obj.extend(seg[:,-1])
-    
+
     for obj in set(edge_obj):
         seg[seg==obj]=0
 
     seg=skimage.measure.label(seg>0,connectivity=1)
-    
+
     #fig,ax=plt.subplots()
     #ax.imshow(skimage.color.label2rgb(seg))
     #plt.show()
@@ -88,6 +89,14 @@ def detect_ridges(background,device):
                 max_dist=this_dist
 
         corners.append([first_corner,second_corner])
+
+        #calculate ridge slope and reject objects that don't match the ridges
+        abs_slopes=[abs((c[0][0]-c[1][0])/(c[0][1]-c[1][1])) for c in corners]
+        med_slope=np.median(abs_slopes)
+        for i in range(len(corners)):
+            #if the slope is off by more than 20%, can it
+            if (abs_slopes[i]<(0.8*med_slope)) or (abs_slopes[i]>(1.2*med_slope)):
+                del corners[i]
 
 
     #Get 'top' corners and use them to estimate tilt, scale and number of ridges
@@ -134,7 +143,7 @@ def detect_ridges(background,device):
     optimized_params=[detected_num_ridges,*optimized_result.x,background.shape]
 
     device_mask=device.get_mask(*optimized_params)
-            
+
     fig,ax=plt.subplots(nrows=2,ncols=2,sharex=True,sharey=True)
     ax=[a for row in ax for a in row]
     bg_overlay=background.copy()
@@ -148,7 +157,7 @@ def detect_ridges(background,device):
     ax[3].plot(corners_x,corners_y,'k+',markersize=15)
     plt.show()
 
-    return optimized_result
+    return heimdall.device.CalibratedDevice(device,*optimized_params[0:-1])
 
 def maximize_overlap(ridge_mask,device,initial_guess):
     '''Parameters:
@@ -234,7 +243,7 @@ def gen_movers(vid,bg,cell_size,min_cell_size=None,debug=False):
             elif response:
                 debug=False
             plt.close('all')
-        
+
         yield labeled_binary
 
 def get_vid_length(vid_path):
@@ -279,7 +288,7 @@ def get_centroid(obj_mask):
 def get_vid_iterator(vid_path):
     return VidIterator(vid_path)
 
-class VidIterator:
+class VidIterable:
     """Iterator to allow multiple scans across a video, vid_flow_direction should be the direction the cells flow, either 'left' or 'up'"""
     def __init__(self,vid_path,vid_flow_direction='left'):
         if vid_path.split('.')[-1]=='cine' or vid_flow_direction!='left':
@@ -303,7 +312,7 @@ class VidIterator:
                 rotate=''
             else:
                 raise Exception("vid_flow_direction must be 'up' or 'left'")
-    
+
             os_handle,new_file_path=tempfile.mkstemp(suffix='.mp4')
             #close file, we don't work with it directly
             os.close(os_handle)

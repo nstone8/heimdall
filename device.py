@@ -10,16 +10,7 @@ class RidgeSpec:
 
     def get_mask(self,num_ridge,scale,tilt,offset_y,offset_x,im_shape,im_dtype=np.bool):
         mask=np.zeros(im_shape,im_dtype)
-        starting_coords=((0,0),(-self.width*scale,0),((-1*scale*self.height/np.tan(self.angle))-self.width*scale,self.height*scale),(-1*scale*self.height/np.tan(self.angle),self.height*scale))
-
-        all_coords_no_tilt_no_trans=[]
-        for i in range(num_ridge):
-            all_coords_no_tilt_no_trans.append([(x-(i*self.spacing*scale),y) for x,y in starting_coords])
-            
-        all_coords_no_trans=[[_rotate_point(x,y,tilt) for x,y in ridge] for ridge in all_coords_no_tilt_no_trans]
-
-        all_coords=[[(x+offset_x,y+offset_y) for x,y in ridge] for ridge in all_coords_no_trans]
-        
+        all_coords=self.get_ridge_coords(num_ridge,scale,tilt,offset_y,offset_x)
         #generate mask
         for ridge in all_coords:
             ridge_x=[r[0] for r in ridge]
@@ -28,8 +19,32 @@ class RidgeSpec:
             mask[rr,cc]=True
 
         return mask
-            
-def _rotate_point(x,y,angle)->(float,float):
+    def get_ridge_coords(self,num_ridge,scale,tilt,offset_y,offset_x):
+        starting_coords=((0,0),(-self.width*scale,0),((-1*scale*self.height/np.tan(self.angle))-self.width*scale,self.height*scale),(-1*scale*self.height/np.tan(self.angle),self.height*scale))
+        all_coords_no_tilt_no_trans=[]
+        for i in range(num_ridge):
+            all_coords_no_tilt_no_trans.append([(x-(i*self.spacing*scale),y) for x,y in starting_coords])
+
+        all_coords_no_trans=[[rotate_point(x,y,tilt) for x,y in ridge] for ridge in all_coords_no_tilt_no_trans]
+
+        all_coords=[[(x+offset_x,y+offset_y) for x,y in ridge] for ridge in all_coords_no_trans]
+        return all_coords
+
+class CalibratedDevice:
+    def __init__(self,ridge_spec,num_ridge,scale,tilt,offset_y,offset_x):
+        self.num_ridge=num_ridge
+        self.scale=scale
+        self.tilt=tilt
+        self.offset_y=offset_y
+        self.offset_x=offset_x
+        self.ridge_spec=ridge_spec
+        ridge_coords=ridge_spec.get_ridge_coords(num_ridge,1,0,0,0)
+        #flip y axis to go from image to real coordinates
+        for ridge in range(len(ridge_coords)):
+            ridge_coords[ridge]=[(x,-y) for x,y in ridge_coords[ridge]]
+        self.ridge_coords=ridge_coords
+
+def rotate_point(x,y,angle)->(float,float):
     r=np.sqrt((x**2)+(y**2))
     if r==0:
         return 0,0

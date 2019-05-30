@@ -38,7 +38,7 @@ def get_tracks(vid_path:str,num_bg,cell_size,min_cell_size=None,velocity=None,me
                     closest_path=path
             if closest_path:
                 closest_path.add_point(this_point)
-                
+
             else:
                 new_path=Path()
                 new_path.add_point(this_point)
@@ -48,6 +48,7 @@ def get_tracks(vid_path:str,num_bg,cell_size,min_cell_size=None,velocity=None,me
     plt.imshow(path_image)
     plt.show()
     return paths
+
 
 class Path:
     def __init__(self):
@@ -76,7 +77,6 @@ class Path:
             x_index.extend(new_x)
             last_point=point
         return y_index,x_index
-        
 
 class Point:
     def __init__(self,time:int,location:(int,int),velocity:float,memory:int):
@@ -101,3 +101,18 @@ def draw_paths(paths:tuple,img_dim):
         y_coords,x_coords=path.get_path_coords()
         img[y_coords,x_coords]=True
     return img
+
+def plot_paths(*cal_paths):
+    dev=cal_paths[0].cal_device
+    fig,ax=plt.subplots
+    for ridge in dev.ridge_coords:
+        ridge_x=[r[0] for r in ridge]
+        ridge_y=[r[1] for r in ridge]
+        ax.plot(ridge_x,ridge_y,'k-')
+
+    for cal_path_group in cal_paths:
+        for path in cal_path_group:
+            path_x=[p[1] for p in path]
+            path_y=[p[0] for p in path]
+            ax.plot(path_x,path_y,'b-')
+    plt.show()

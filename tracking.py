@@ -1,10 +1,11 @@
 import heimdall.improcessing as imp
+import heimdall.device
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 import skimage.draw
 
-def get_tracks(movers,time_factor:int=10,max_dist_percentile=99.9,mem=None,debug=False):
+def get_tracks(movers,time_factor:int=10,max_dist_percentile=99,mem=None,debug=False):
     time=0
     coords=[]
     for frame in movers:
@@ -73,7 +74,7 @@ def get_tracks(movers,time_factor:int=10,max_dist_percentile=99.9,mem=None,debug
             points.append(p)
         else:
             points_unprocessed.append(p)
-                
+
     print('Trimming paths')
     max_dist=np.percentile([c for c in closest_points if c],max_dist_percentile)
     print('max_dist:',max_dist)
@@ -136,6 +137,29 @@ def get_tracks(movers,time_factor:int=10,max_dist_percentile=99.9,mem=None,debug
         plt.show()
     return paths
 
+def calibrate_paths(paths,cal_device):
+    #transform paths into a list of lists of coordinates
+    paths_arr=[list(p.points) for p in paths]
+    for path in paths_arr:
+        for i in range(len(path)):
+            path[i]=list(path[i].coords)
+    for points in paths_arr:
+        for p in points:
+            #first subtract off offset
+            p[0]=p[0]-cal_device.offset_y
+            p[1]=p[1]-cal_device.offset_x
+            #now rotate points
+            tilt_angle=np.arctan(cal_device.tilt)
+            new_x,new_y=heimdall.device.rotate_point(p[1],p[0],-tilt_angle)
+            p[0]=new_y
+            p[1]=new_x
+            #now scale them
+            p[0]/=cal_device.scale
+            p[1]/=cal_device.scale
+            #now flip y axis to go from image to real coordinates
+            p[0]*=-1
+    return CalibratedPaths(paths_arr,cal_device)
+
 class Point:
     def __init__(self,coords):
         self.coords=coords
@@ -170,7 +194,7 @@ class Point:
         dist_spatial=np.sqrt(((self.coords[0]-point.coords[0])**2)+((self.coords[1]-point.coords[1])**2))
         total_dist=np.sqrt(((self.coords[2]-point.coords[2])**2)+(dist_spatial**2))
         return total_dist
-            
+
     def get_closest(self,points:list):
         min_dist=float('inf')
         min_dist_point=None
@@ -200,9 +224,29 @@ class Path:
             last_point=point
         return y_index,x_index
 
+class CalibratedPaths:
+    def __init__(self,paths,cal_device):
+        self.paths=paths
+        self.cal_device=cal_device
+
 def draw_paths(paths:tuple,img_dim):
     img=np.zeros(img_dim,np.bool)
     for path in paths:
         y_coords,x_coords=path.get_path_coords()
         img[y_coords,x_coords]=True
     return img
+
+def plot_paths(*cal_paths):
+    dev=cal_paths[0].cal_device
+    fig,ax=plt.subplots()
+    for ridge in dev.ridge_coords:
+        ridge_x=[r[0] for r in ridge+ridge[0:1]]
+        ridge_y=[r[1] for r in ridge+ridge[0:1]]
+        ax.plot(ridge_x,ridge_y,'k-')
+
+    for cal_path_group in cal_paths:
+        for path in cal_path_group.paths:
+            path_x=[p[1] for p in path]
+            path_y=[p[0] for p in path]
+            ax.plot(path_x,path_y,'b-')
+    plt.show()
