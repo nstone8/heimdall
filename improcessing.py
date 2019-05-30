@@ -290,7 +290,8 @@ def get_vid_iterator(vid_path):
 
 class VidIterable:
     """Iterator to allow multiple scans across a video, vid_flow_direction should be the direction the cells flow, either 'left' or 'up'"""
-    def __init__(self,vid_path,vid_flow_direction='left'):
+    def __init__(self,vid_path,num_frames=0,vid_flow_direction='left'):
+        self.num_frames=num_frames
         if vid_path.split('.')[-1]=='cine' or vid_flow_direction!='left':
             #This is a cine file or needs to be rotated, convert to mp4
             print('Converting .cine file to mp4 (lossless)')
@@ -327,7 +328,7 @@ class VidIterable:
             self.vid_path=vid_path
             self.delete_file=False
     def __iter__(self):
-        return skvideo.io.vreader(self.vid_path,as_grey=True)
+        return skvideo.io.vreader(self.vid_path,num_frames=self.num_frames,as_grey=True)
     def __del__(self):
         #need to delete any temp files when we are destroyed
         if self.delete_file:
