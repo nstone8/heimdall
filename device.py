@@ -46,6 +46,9 @@ class CalibratedDevice:
         self.ridge_coords=ridge_coords
         self.ridge_poly=[shapely.geometry.Polygon(points) for points in self.ridge_coords]
 
+    def get_ridge_sep(self):
+        return self.ridge_poly[0].distance(self.ridge_poly[1])
+
     def point_under_ridge(self,point:tuple):
         '''returns None or the index of the ridge this point is under'''
         point_point=shapely.geometry.Point([point[1],point[0]])
@@ -63,19 +66,23 @@ class CalibratedDevice:
                 return None,None
             else:
                 return ridge_dists[under_ridge+1],under_ridge+1
-        ridge_sep=self.ridge_poly[0].distance(self.ridge_poly[1])
+        ridge_sep=self.get_ridge_sep()
         sep_ratio=[dist/ridge_sep for dist in ridge_dists]
         close_ridges_indices=[]
         for j in range(len(sep_ratio)):
             if sep_ratio[j]<1:
                 close_ridges_indices.append(j)
-        if len(close_ridges_indices)>1:
+        if self.point_in_gutter(point):
+            return None,'point_in_gutter'
+        elif len(close_ridges_indices)>1:
             closest_ridge=max(close_ridges_indices)
-        elif sep_ratio.index(min(sep_ratio))==0:
+        elif ridge_dists.index(min(ridge_dists))==0:
             closest_ridge=0
+        elif ridge_dists.index(min(ridge_dists))==(len(self.ridge_poly)-1):
+            return None,'after_last_ridge'
         else:
-            return None,None
-
+            print(sep_ratio)
+            print(point)
         return ridge_dists[closest_ridge],closest_ridge
 
     def point_in_gutter(self,point):
@@ -83,8 +90,8 @@ class CalibratedDevice:
             return True
         else:
             return False
-            
-        
+
+
 def rotate_point(x,y,angle)->(float,float):
     r=np.sqrt((x**2)+(y**2))
     if r==0:
