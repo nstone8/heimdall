@@ -1,5 +1,6 @@
 import numpy as np
 import skimage.draw
+import shapely.geometry
 
 class RidgeSpec:
     def __init__(self,ridge_height:float,ridge_width:float,ridge_spacing:float,ridge_angle:float):
@@ -43,16 +44,47 @@ class CalibratedDevice:
         for ridge in range(len(ridge_coords)):
             ridge_coords[ridge]=[(x,-y) for x,y in ridge_coords[ridge]]
         self.ridge_coords=ridge_coords
+        self.ridge_poly=[shapely.geometry.Polygon(points) for points in self.ridge_coords]
 
-    def point_under_ridge(self,point):
+    def point_under_ridge(self,point:tuple):
         '''returns None or the index of the ridge this point is under'''
-        ridge_poly=[shapely.geometry.Polygon(points) for points in self.ridge_coords]
-        point_point=shapely.geometry.Point(point)
-        for i in range(len(ridge_poly)):
-            if ridge_poly[i].contains(point_point):
+        point_point=shapely.geometry.Point([point[1],point[0]])
+        for i in range(len(self.ridge_poly)):
+            if self.ridge_poly[i].contains(point_point):
                 return i
         return None
-    
+
+    def dist_to_next_ridge(self,point:tuple)->('dist','ridge_no'):
+        point_point=shapely.geometry.Point([point[1],point[0]])
+        ridge_dists=[point_point.distance(ridge) for ridge in self.ridge_poly]
+        under_ridge=self.point_under_ridge(point)
+        if under_ridge!=None:
+            if (len(self.ridge_poly)-1)<=under_ridge:
+                return None,None
+            else:
+                return ridge_dists[under_ridge+1],under_ridge+1
+        ridge_sep=self.ridge_poly[0].distance(self.ridge_poly[1])
+        sep_ratio=[dist/ridge_sep for dist in ridge_dists]
+        close_ridges_indices=[]
+        for j in range(len(sep_ratio)):
+            if sep_ratio[j]<1:
+                close_ridges_indices.append(j)
+        if len(close_ridges_indices)>1:
+            closest_ridge=max(close_ridges_indices)
+        elif sep_ratio.index(min(sep_ratio))==0:
+            closest_ridge=0
+        else:
+            return None,None
+
+        return ridge_dists[closest_ridge],closest_ridge
+
+    def point_in_gutter(self,point):
+        if (point[0]>self.ridge_coords[0][0][1]) or (point[0]<self.ridge_coords[0][2][1]):
+            return True
+        else:
+            return False
+            
+        
 def rotate_point(x,y,angle)->(float,float):
     r=np.sqrt((x**2)+(y**2))
     if r==0:

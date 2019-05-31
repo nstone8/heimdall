@@ -3,20 +3,20 @@ import heimdall.device
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
+import pandas as pd
 import skimage.draw
-import shapely
 
 def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num_frames=0,vid_flow_direction='left',num_bg=None,time_factor=10,max_dist_percentile=99,mem=None,debug=False):
     '''cell_size and min_cell_size should be in microns'''
-    vid=imp.VidIterable(vid_path,num_frames=0,vid_flow_direction='left')
+    vid=imp.VidIterable(vid_path,num_frames=num_frames,vid_flow_direction=vid_flow_direction)
     bg=imp.get_background(vid,num_bg)
-    cal_device=imp.detect_ridges(bg,device)
+    cal_device=imp.detect_ridges(bg,device,debug)
     cell_size*=cal_device.scale
     if min_cell_size:
         min_cell_size*=cal_device.scale
     movers=imp.gen_movers(vid,bg,cell_size,min_cell_size,debug)
     tracks=get_tracks(movers,time_factor,max_dist_percentile,mem,debug)
-    cal_paths=calibrate_paths(paths,cal_device)
+    cal_paths=calibrate_paths(tracks,cal_device)
     return cal_paths
 
 def get_tracks(movers,time_factor:int=10,max_dist_percentile=99,mem=None,debug=False):
@@ -242,6 +242,21 @@ class CalibratedPaths:
     def __init__(self,paths,cal_device):
         self.paths=paths
         self.cal_device=cal_device
+    def to_df(self)->pd.DataFrame:
+        path_frames=[]
+        path_no=0
+        for p in self.paths:
+            x=[point[1] for point in p]
+            y=[point[0] for point in p]
+            t=[point[2] for point in p]
+            dist_and_next_ridge=[self.cal_device.dist_to_next_ridge(point) for point in p]
+            dist_next=[d[0] for d in dist_and_next_ridge]
+            next_ridge=[d[1] for d in dist_and_next_ridge]
+            under_ridge=[self.cal_device.point_under_ridge(point) for point in p]
+            in_gutter=[self.cal_device.point_in_gutter(point) for point in p]
+            path_frames.append(pd.DataFrame(dict(path=[path_no]*len(x),x=x,y=y,t=t,dist_next_ridge=dist_next,next_ridge=next_ridge,under_ridge=under_ridge,in_gutter=in_gutter)))
+            path_no+=1
+        return pd.concat(path_frames,ignore_index=True)
 
 def draw_paths(paths:tuple,img_dim):
     img=np.zeros(img_dim,np.bool)
@@ -250,20 +265,15 @@ def draw_paths(paths:tuple,img_dim):
         img[y_coords,x_coords]=True
     return img
 
-def plot_paths(*cal_paths,colors=['b', 'g', 'r', 'c', 'm', 'y', 'k']):
+def plot_paths(*cal_paths,colors=('b', 'g', 'r', 'c', 'm', 'y', 'k')):
+    colors=list(colors)
     for i in range(len(colors)):
         colors[i]+='-'
-    len_ratio=np.ceil(len(cal_paths)/len(colors))
+    len_ratio=int(np.ceil(len(cal_paths)/len(colors)))
     colors*=len_ratio
     #Check for the same device
-    device_ridge_coords=zip([p.cal_device.ridge_coords for p in cal_paths])
-    num_same=0
-    for ridges in device_ridge_coords:
-        for this_ridge in ridges[1:]:
-            if this_ridge!=ridges[0]:
-                break
-        else:
-            num_same+=1
+    device_num_ridges=([len(p.cal_device.ridge_coords) for p in cal_paths])
+    num_same=min(device_num_ridges)
     dev=cal_paths[0].cal_device
     fig,ax=plt.subplots()
     for ridge in dev.ridge_coords[0:num_same]:

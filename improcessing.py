@@ -29,7 +29,7 @@ def get_background(vid,num_bg):
     background=total/count
     return background.astype(first_frame.dtype)
 
-def detect_ridges(background,device):
+def detect_ridges(background,device,debug=False):
     sobel=skimage.filters.sobel(background)
     thresh=skimage.filters.threshold_otsu(sobel)
     ridges=sobel>thresh
@@ -141,21 +141,20 @@ def detect_ridges(background,device):
 
     #need to add in detected_num_ridges and background.shape as they were not considered in optimization
     optimized_params=[detected_num_ridges,*optimized_result.x,background.shape]
-
-    device_mask=device.get_mask(*optimized_params)
-
-    fig,ax=plt.subplots(nrows=2,ncols=2,sharex=True,sharey=True)
-    ax=[a for row in ax for a in row]
-    bg_overlay=background.copy()
-    bg_overlay[device_mask>0]=0
-    ax[0].imshow(bg_overlay)
-    ax[1].imshow(ridges_skeleton)
-    ax[2].imshow(ridges_closed)
-    ax[3].imshow(skimage.color.label2rgb(seg))
-    corners_y=[p[0] for pair in corners for p in pair]
-    corners_x=[p[1] for pair in corners for p in pair]
-    ax[3].plot(corners_x,corners_y,'k+',markersize=15)
-    plt.show()
+    if debug:
+        device_mask=device.get_mask(*optimized_params)
+        fig,ax=plt.subplots(nrows=2,ncols=2,sharex=True,sharey=True)
+        ax=[a for row in ax for a in row]
+        bg_overlay=background.copy()
+        bg_overlay[device_mask>0]=0
+        ax[0].imshow(bg_overlay)
+        ax[1].imshow(ridges_skeleton)
+        ax[2].imshow(ridges_closed)
+        ax[3].imshow(skimage.color.label2rgb(seg))
+        corners_y=[p[0] for pair in corners for p in pair]
+        corners_x=[p[1] for pair in corners for p in pair]
+        ax[3].plot(corners_x,corners_y,'k+',markersize=15)
+        plt.show()
 
     return heimdall.device.CalibratedDevice(device,*optimized_params[0:-1])
 
@@ -290,7 +289,7 @@ def get_vid_iterator(vid_path):
 
 class VidIterable:
     """Iterator to allow multiple scans across a video, vid_flow_direction should be the direction the cells flow, either 'left' or 'up'"""
-    def __init__(self,vid_path,num_frames=0,vid_flow_direction='left'):
+    def __init__(self,vid_path,num_frames=None,vid_flow_direction='left'):
         self.num_frames=num_frames
         if vid_path.split('.')[-1]=='cine' or vid_flow_direction!='left':
             #This is a cine file or needs to be rotated, convert to mp4
@@ -313,11 +312,16 @@ class VidIterable:
                 rotate=''
             else:
                 raise Exception("vid_flow_direction must be 'up' or 'left'")
-
+            if num_frames!=None:
+                frames='-frames:v {0} '.format(num_frames)
+            else:
+                frames=''
             os_handle,new_file_path=tempfile.mkstemp(suffix='.mp4')
             #close file, we don't work with it directly
             os.close(os_handle)
-            list(os.popen('ffmpeg -y -i {orig_file} {rotate}-f mp4 -crf 0 {new_file}'.format(orig_file=corrected_vid_path,rotate=rotate,new_file=new_file_path)))
+            ffmpeg_command='ffmpeg -y -i {orig_file} {frames}{rotate}-f mp4 -crf 0 {new_file}'.format(orig_file=corrected_vid_path,rotate=rotate,new_file=new_file_path,frames=frames)
+            print(ffmpeg_command)
+            list(os.popen(ffmpeg_command))
             self.vid_path=new_file_path
             self.delete_file=True
             stats=os.stat(new_file_path)
@@ -328,7 +332,7 @@ class VidIterable:
             self.vid_path=vid_path
             self.delete_file=False
     def __iter__(self):
-        return skvideo.io.vreader(self.vid_path,num_frames=self.num_frames,as_grey=True)
+        return skvideo.io.vreader(self.vid_path,as_grey=True)
     def __del__(self):
         #need to delete any temp files when we are destroyed
         if self.delete_file:
