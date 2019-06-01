@@ -59,32 +59,32 @@ class CalibratedDevice:
 
     def dist_to_next_ridge(self,point:tuple)->('dist','ridge_no'):
         point_point=shapely.geometry.Point([point[1],point[0]])
-        ridge_dists=[point_point.distance(ridge) for ridge in self.ridge_poly]
-        under_ridge=self.point_under_ridge(point)
-        if under_ridge!=None:
-            if (len(self.ridge_poly)-1)<=under_ridge:
-                return None,None
-            else:
-                return ridge_dists[under_ridge+1],under_ridge+1
-        ridge_sep=self.get_ridge_sep()
-        sep_ratio=[dist/ridge_sep for dist in ridge_dists]
-        close_ridges_indices=[]
-        for j in range(len(sep_ratio)):
-            if sep_ratio[j]<1:
-                close_ridges_indices.append(j)
-        if self.point_in_gutter(point):
-            return None,'point_in_gutter'
-        elif len(close_ridges_indices)>1:
-            closest_ridge=max(close_ridges_indices)
-        elif ridge_dists.index(min(ridge_dists))==0:
-            closest_ridge=0
-        elif ridge_dists.index(min(ridge_dists))==(len(self.ridge_poly)-1):
+        ridge_dists=[r.distance(point_point) for r in self.ridge_poly]
+        ridge_rings=[ridge.exterior for ridge in self.ridge_poly]
+        ridge_closest_points=[ring.interpolate(ring.project(point_point)).coords[0] for ring in ridge_rings]
+        num_ridges=len(self.ridge_coords)
+        ridges_ahead=[]
+        for i in range(num_ridges):
+            if self.ridge_poly[i].contains(point_point):
+                if i==(num_ridges-1):
+                    return None,'after_last_ridge'                
+                #if we're under a ridge, the next ridge is us+1
+                else:
+                    return ridge_dists[i+1],i+1
+            elif (ridge_closest_points[i][0]-point[1])<0:
+                #if the vector to the closest point on a ring has a negative x component, it is in front of us
+                ridges_ahead.append(i)
+        min_dist_ahead=float('inf')
+        next_ridge=None
+        for j in ridges_ahead:
+            if ridge_dists[j]<min_dist_ahead:
+                min_dist_ahead=ridge_dists[j]
+                next_ridge=j
+        if next_ridge==None:
             return None,'after_last_ridge'
         else:
-            print(sep_ratio)
-            print(point)
-        return ridge_dists[closest_ridge],closest_ridge
-
+            return ridge_dists[next_ridge],next_ridge
+        
     def point_in_gutter(self,point):
         if (point[0]>self.ridge_coords[0][0][1]) or (point[0]<self.ridge_coords[0][2][1]):
             return True
