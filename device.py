@@ -67,7 +67,7 @@ class CalibratedDevice:
         for i in range(num_ridges):
             if self.ridge_poly[i].contains(point_point):
                 if i==(num_ridges-1):
-                    return None,'after_last_ridge'                
+                    return None,'after_last_ridge'
                 #if we're under a ridge, the next ridge is us+1
                 else:
                     return ridge_dists[i+1],i+1
@@ -84,21 +84,21 @@ class CalibratedDevice:
             return None,'after_last_ridge'
         else:
             return ridge_dists[next_ridge],next_ridge
-        
+
     def point_in_gutter(self,point):
         if (point[0]>self.ridge_coords[0][0][1]) or (point[0]<self.ridge_coords[0][2][1]):
             return True
         else:
             return False
 
-    def get_ridge_offsets(self,offset:float):        
+    def get_ridge_offsets(self,offset:float):
         '''get shapely.LineStrings offset displaced upstream and downstream from the ridge'''
         out=[]
         for ridge in self.ridge_coords:
-            upstream_vertices=self.ridge_coords[0:1]+self.ridge_coords[3:]
-            downstream_vertices=self.ridge_coords[1:3]
-            upstream=shapely.geometry.LineString([[x+offset,y] for x,y in upstream_verices])
-            downstream=shapely.geometry.LineString([[x-offset,y] for x,y in downstream_verices])
+            upstream_vertices=ridge[0:1]+ridge[3:]
+            downstream_vertices=ridge[1:3]
+            upstream=shapely.geometry.LineString([[x+offset,y] for x,y in upstream_vertices])
+            downstream=shapely.geometry.LineString([[x-offset,y] for x,y in downstream_vertices])
             out.append([upstream,downstream])
         return out
 
