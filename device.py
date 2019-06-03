@@ -91,6 +91,16 @@ class CalibratedDevice:
         else:
             return False
 
+    def get_ridge_offsets(self,offset:float):        
+        '''get shapely.LineStrings offset displaced upstream and downstream from the ridge'''
+        out=[]
+        for ridge in self.ridge_coords:
+            upstream_vertices=self.ridge_coords[0:1]+self.ridge_coords[3:]
+            downstream_vertices=self.ridge_coords[1:3]
+            upstream=shapely.geometry.LineString([[x+offset,y] for x,y in upstream_verices])
+            downstream=shapely.geometry.LineString([[x-offset,y] for x,y in downstream_verices])
+            out.append([upstream,downstream])
+        return out
 
 def rotate_point(x,y,angle)->(float,float):
     r=np.sqrt((x**2)+(y**2))
