@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import skimage.draw
 
-def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num_frames=0,vid_flow_direction='left',num_bg=None,time_factor=10,max_dist_percentile=99,mem=None,debug=False):
+def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num_frames=None,vid_flow_direction='left',num_bg=None,time_factor=10,max_dist_percentile=99,mem=None,debug=False):
     '''cell_size and min_cell_size should be in microns'''
     vid=imp.VidIterable(vid_path,num_frames=num_frames,vid_flow_direction=vid_flow_direction)
     bg=imp.get_background(vid,num_bg)
@@ -149,6 +149,11 @@ def get_tracks(movers,time_factor:int=10,max_dist_percentile=99,mem=None,debug=F
     if debug:
         plt.imshow(draw_paths(paths,frame.shape))
         plt.show()
+    #divide off time factor
+    for path in paths:
+        for p in path.points:
+            new_coords=(p.coords[0],p.coords[1],p.coords[2]/time_factor)
+            p.coords=new_coords
     return paths
 
 def calibrate_paths(paths,cal_device):
