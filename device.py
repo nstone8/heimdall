@@ -33,6 +33,7 @@ class RidgeSpec:
 
 class CalibratedDevice:
     def __init__(self,ridge_spec,num_ridge,scale,tilt,offset_y,offset_x):
+        print('optimized tilt:',tilt)
         self.num_ridge=num_ridge
         self.scale=scale
         self.tilt=tilt
@@ -112,7 +113,7 @@ def rotate_point(x,y,angle)->(float,float):
         else:
             start_angle=3*np.pi/2
     else:
-        start_angle=np.pi-np.arctan(y/x)
+        start_angle=np.pi+np.arctan(y/x)
     new_x=r*np.cos(start_angle+angle)
     new_y=r*np.sin(start_angle+angle)
-    return x,y
+    return new_x,new_y
