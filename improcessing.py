@@ -136,8 +136,14 @@ def detect_ridges(background,device,debug=False):
 
     #print('Estimated values:')
     #print('tilt:{tilt}, spacing:{spacing}, number of ridges:{ridge}, y offset:{y}, x offset:{x}'.format(tilt=detected_tilt,spacing=detected_ridge_spacing,ridge=detected_num_ridges,y=detected_y_offset,x=detected_x_offset))
-
-    optimized_result=maximize_overlap(ridges_skeleton,device,[detected_num_ridges,detected_scale,detected_tilt,detected_y_offset,detected_x_offset,background.shape])
+    optimized_result=None
+    best_error=float('inf')
+    for tilt_factor in np.linspace(0,2,11):
+        print('Testing tilt_factor:',tilt_factor)
+        this_result=maximize_overlap(ridges_skeleton,device,[detected_num_ridges,detected_scale,detected_tilt*tilt_factor,detected_y_offset,detected_x_offset,background.shape])
+        if this_result.fun<best_error:
+            best_error=this_result.fun
+            optimized_result=this_result
 
     #need to add in detected_num_ridges and background.shape as they were not considered in optimization
     optimized_params=[detected_num_ridges,*optimized_result.x,background.shape]
