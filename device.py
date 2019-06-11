@@ -105,15 +105,7 @@ class CalibratedDevice:
 
 def rotate_point(x,y,angle)->(float,float):
     r=np.sqrt((x**2)+(y**2))
-    if r==0:
-        return 0,0
-    elif x==0:
-        if y>0:
-            start_angle=np.pi/2
-        else:
-            start_angle=3*np.pi/2
-    else:
-        start_angle=np.pi+np.arctan(y/x)
+    start_angle=np.arctan2(y,x)
     new_x=r*np.cos(start_angle+angle)
     new_y=r*np.sin(start_angle+angle)
     return new_x,new_y
