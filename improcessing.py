@@ -14,7 +14,15 @@ import skimage.color
 import skimage.measure
 from matplotlib import pyplot as plt
 
-def get_background(vid,num_bg):
+def get_background(vid:'heimdall.improcessing.VidIterable',num_bg:'int'):
+    '''Extract the background from a video by taking the mean of many frames.
+    -----Parameters-----
+    vid: heimdall.improcessing.VidIterable object representing the video to be processed
+    num_bg: Number of frames to process
+
+    -----Returns-----
+    background: image of the video background as a numpy.ndarray'''
+    
     #take mean of all frames
     vid=iter(vid)
     first_frame=next(vid)[0,:,:,0]
@@ -29,7 +37,15 @@ def get_background(vid,num_bg):
     background=total/count
     return background.astype(first_frame.dtype)
 
-def detect_ridges(background,device,debug=False):
+def detect_ridges(background:np.ndarray,device:heimdall.device.RidgeSpec,debug:bool=False):
+    '''Detect ridge location in an image
+    -----Parameters-----
+    background: Image to detect ridges in. Usually produced by heimdall.improcessing.get_background()
+    device: A heimdall.device.RidgeSpec defining the geometry of the device pictured in background
+
+    -----Returns-----
+    cal_device: A heimdall.device.CalibratedDevice representing the detected transformation between image and device coordinates
+    '''
     sobel=skimage.filters.sobel(background)
     thresh=skimage.filters.threshold_otsu(sobel)
     ridges=sobel>thresh
@@ -157,12 +173,27 @@ def detect_ridges(background,device,debug=False):
 
     return heimdall.device.CalibratedDevice(device,*optimized_params[0:-1])
 
-def maximize_overlap(ridge_mask,device,initial_guess):
-    '''Parameters:
-    ridge_mask: ridge skeleton mask
-    device: device object
-    initial_guess: list of args for device.get_mask()'''
-    def total_dist(source_mask,device_mask):
+def maximize_overlap(ridge_mask:np.ndarray,device:heimdall.device.RidgeSpec,initial_guess:list):
+    '''Maximize the overlap between device.get_mask(*args) and ridge_mask
+
+    -----Parameters-----
+    ridge_mask: a numpy.ndarray containing the ridge skeleton mask
+    device: a heimdall.device.RidgeSpec representing the device geometry being aligned
+    initial_guess: list of args for device.get_mask() constituting a guess for correct alignment
+
+    -----Returns-----
+    res: a scipy.optimize.OptimizeResult object representing optimized alignment between device and ridge_mask
+    '''
+    def total_dist(source_mask:np.ndarray,device_mask:np.ndarray):
+        '''Get the sum of squares of the distance between each positive point on device_mask to the (orthagonally) closest positive point on source_mask
+
+        -----Parameters-----
+        source_mask: A numpy.ndarray representing the 'target' geometry we are aligning to
+        device_mask: A numpy.ndarray representing a guess for aligned geometry
+
+        -----Returns-----
+        total_distance: The sum of squares of the distance between each positive point on device_mask to the (orthagonally) closest positive point on source_mask
+        '''
         total_distance=0
         #for each point on the device mask see how far (orthagonally) the nearest point on the source_mask is
         x_arr,y_arr=np.nonzero(device_mask)
@@ -186,9 +217,19 @@ def maximize_overlap(ridge_mask,device,initial_guess):
     res=scipy.optimize.minimize(lambda x: total_dist(ridge_mask,device.get_mask(initial_guess[0],*x,initial_guess[-1])),initial_guess[1:-1],method='Nelder-Mead')
     return res
 
-def gen_movers(vid,bg,cell_size,min_cell_size=None,debug=False):
-    '''get moving objects in a video if min_cell_size==None, it will be set to 50% of cell_size
-    all sizes should be in pixels'''
+def gen_movers(vid:'heimdall.improcessing.VidIterable',bg:np.ndarray,cell_size:int,min_cell_size:int=None,debug:bool=False):
+    '''Generate moving objects in a video
+
+    -----Parameters-----
+    vid: A heimdall.improcessing.VidIterable representing the video to be processed
+    bg: A numpy.ndarray representing the background of vid. Usually produced by heimdall.improcessing.get_background()
+    cell_size: Nominal size (in pixels) of cells in this video
+    min_cell_size: The minimum object size (in pixels) to be considered a cell. If None (the default), it will be set to 50% of cell_size
+    debug: Whether or not to display plots for debugging. Default is False
+
+    -----Returns-----
+    movers: A generator object which yields numpy.ndarrays in which pixels belonging to each detected object are labeled with unique integers and background pixels are labeled with zeros
+    '''
     if min_cell_size==None:
         min_cell_size=.5*cell_size
     print('Detecting contrast')
@@ -245,15 +286,32 @@ def gen_movers(vid,bg,cell_size,min_cell_size=None,debug=False):
         yield labeled_binary
 
 def get_vid_length(vid_path):
+    '''Get the number of frames in a video
+    
+    -----Parameters-----
+    vid_path: Path to a video file
+
+    -----Returns-----
+    num_frames: The number of frames in the video stored at vid_path
+    '''
     vid=skvideo.io.vreader(vid_path)
     num_frames=0
     for frame in vid:
         num_frames+=1
     return num_frames
 
-def save_movers_vid(frames_iter,path,num_frames,frame_by_frame=False):
-    '''save iterable of frames as a video to path
-    video must be able to fit in memory'''
+def save_movers_vid(frames_iter:'generator',path:str,num_frames:int,frame_by_frame:bool=False):
+    '''Save iterable of frames as a video (video must be able to fit in memory)
+
+    -----Parameters-----
+    frames_iter: A generator of numpy.ndarrays representing images (such as that produced by gen_movers())
+    path: Location to store video file
+    num_frames: The number of frames in frames_iter
+    frame_by_frame: A bool indicating whether or not to display images frame by frame while assembling video. Default is False
+
+    -----Returns-----
+    None
+    '''
     print('Assembling video')
     first_frame=skimage.color.label2rgb(next(frames_iter)>0)
     frames=np.zeros((num_frames,*first_frame.shape),first_frame.dtype)
@@ -277,18 +335,31 @@ def save_movers_vid(frames_iter,path,num_frames,frame_by_frame=False):
             plt.close('all')
     print('writing video')
     skvideo.io.vwrite(path,frames)
-def get_centroid(obj_mask):
+def get_centroid(obj_mask:np.ndarray):
+    '''Get the centroid of the positive pixels in a binary image
+
+    -----Parameters-----
+    obj_mask: A numpy.ndarray representing a binary image
+
+    -----Returns-----
+    [y,x]: Centroid coordinates'''
     moment=skimage.measure.moments(obj_mask)
     centroid=(moment[1, 0] / moment[0, 0], moment[0, 1] / moment[0, 0])
     return [int(np.round(p)) for p in centroid]
 
-
-def get_vid_iterator(vid_path):
-    return VidIterator(vid_path)
-
 class VidIterable:
     """Iterator to allow multiple scans across a video, vid_flow_direction should be the direction the cells flow, either 'left' or 'up'"""
-    def __init__(self,vid_path,num_frames=None,vid_flow_direction='left'):
+    def __init__(self,vid_path:str,num_frames:int=None,vid_flow_direction:str='left'):
+        """Create a new VidIterable object
+
+        -----Parameters-----
+        vid_path: File path where the video that this VidIterable will represent is stored
+        num_frames: Number of frames from the source video to include in this VidIterable
+        vid_flow_direction: The direction in which cells flow in the video. Should be either 'left' or 'up'. Default is 'left'
+        
+        -----Returns-----
+        vid: A new VidIterable object"""
+        
         self.num_frames=num_frames
         if vid_path.split('.')[-1]=='cine' or vid_flow_direction!='left':
             #This is a cine file or needs to be rotated, convert to mp4
@@ -331,8 +402,22 @@ class VidIterable:
             self.vid_path=vid_path
             self.delete_file=False
     def __iter__(self):
+        '''Return an iterator of frames in the video represented by this object
+        
+        -----Parameters-----
+        None
+
+        -----Returns-----
+        iter: an iterator of frames in the video represented by this object'''
         return skvideo.io.vreader(self.vid_path,as_grey=True)
     def __del__(self):
+        '''Clean up any temp files after this object is destroyed
+
+        -----Parameters-----
+        None
+
+        -----Returns-----
+        None'''
         #need to delete any temp files when we are destroyed
         if self.delete_file:
             os.remove(self.vid_path)

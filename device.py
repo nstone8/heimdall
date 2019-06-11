@@ -3,13 +3,38 @@ import skimage.draw
 import shapely.geometry
 
 class RidgeSpec:
+    '''Class representing the geometry of devices consisting of regularly spaced, identical angled ridges'''
     def __init__(self,ridge_height:float,ridge_width:float,ridge_spacing:float,ridge_angle:float):
+        '''Create a new RidgeSpec object
+        
+        -----Parameters-----
+        ridge_height: The height of the ridges measured perpendicular to the channel
+        ridge_width: The width of the ridges measured parallel to the channel
+        ridge_spacing: The pitch of the ridges measured parallel to the channel
+        ridge_angle: The angle of the ridges, measured relative to the long axis of the channel
+
+        -----Returns-----
+        ridge: A new RidgeSpec object'''
         self.height=ridge_height
         self.width=ridge_width
         self.spacing=ridge_spacing
         self.angle=ridge_angle
 
-    def get_mask(self,num_ridge,scale,tilt,offset_y,offset_x,im_shape,im_dtype=np.bool):
+    def get_mask(self,num_ridge:int,scale:float,tilt:float,offset_y:float,offset_x:float,im_shape:tuple,im_dtype=np.bool):
+        '''Get a binary mask showing the ridge geometry transformed into image coordinates
+        
+        -----Parameters-----
+        num_ridge: Number of ridges
+        scale: Microns to pixels conversion factor
+        tilt: Angle to rotate device geometry by
+        offset_y: Y offset in pixels
+        offset_x: X offset in pixels
+        im_shape: Tuple giving the desired shape of the returned mask
+        im_dtype: Desired dtype of the returned mask
+
+        -----Returns-----
+        mask: a binary image with the ridge geometry represented by one pixel wide positive lines'''
+        
         mask=np.zeros(im_shape,im_dtype)
         all_coords=self.get_ridge_coords(num_ridge,scale,tilt,offset_y,offset_x)
         #generate mask
@@ -20,7 +45,9 @@ class RidgeSpec:
             mask[rr,cc]=True
 
         return mask
+    
     def get_ridge_coords(self,num_ridge,scale,tilt,offset_y,offset_x):
+        
         starting_coords=((0,0),(-self.width*scale,0),((-1*scale*self.height/np.tan(self.angle))-self.width*scale,self.height*scale),(-1*scale*self.height/np.tan(self.angle),self.height*scale))
         all_coords_no_tilt_no_trans=[]
         for i in range(num_ridge):
