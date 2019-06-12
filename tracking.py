@@ -7,7 +7,24 @@ import pandas as pd
 import skimage.draw
 
 def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num_frames=None,vid_flow_direction='left',num_bg=None,time_factor=10,max_dist_percentile=99,mem=None,debug=False):
-    '''cell_size and min_cell_size should be in microns'''
+    '''Get calibrated tracks from a video path
+
+    -----Parameters-----
+    vid_path: File path of the video to be processed
+    device: RidgeSpec object representing the geometry of the device in the video
+    cell_size: Nominal size of cells in the video, in microns
+    min_cell_size: Minimum size of cells in the video, in microns. If None, this value defaults to 0.5*cell_size
+    num_frames: Number of frames of the video stored at vid_path to process. If None, defaults to processing the entire video
+    vid_flow_direction: Direction of cell flow in the video stored at vid_path. Must be one of 'up' or 'left' (the default)
+    num_bg: Number of frames to use for backgound extraction. If None, defaults to the entire video.
+    time_factor: Multiplier for converting from temporal to spatial units of distance. Values that are too high will make algorithm tend to link distant points that occurred at the same time. Values that are too small will make the algorithm tend to link close points that occurred at very different times.
+    max_dist_percentile: Percentile of nearest neighbor distances to define as too distant to link. Smaller values require that points be closer together to link
+    mem: Temporal distance (number of frames * time_factor) to search for links in path. If None, all points are considered.
+    debug: Whether to produce debugging output during processing. Default is False.
+
+    -----Returns-----
+    cal_paths: A heimdall.tracking.CalibratedPaths object representing the paths detected in the video, transformed to device coordinates'''
+    
     vid=imp.VidIterable(vid_path,num_frames=num_frames,vid_flow_direction=vid_flow_direction)
     bg=imp.get_background(vid,num_bg)
     cal_device=imp.detect_ridges(bg,device,debug)
@@ -19,7 +36,19 @@ def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num
     cal_paths=calibrate_paths(tracks,cal_device)
     return cal_paths
 
-def get_tracks(movers,time_factor:int=10,max_dist_percentile=99,mem=None,debug=False):
+def get_tracks(movers:'Iterator',time_factor:int=10,max_dist_percentile:float=99,mem:float=None,debug:bool=False):
+    '''Get tracks from an iterator of labelled masks
+
+    -----Parameters-----
+    movers: An iterator of labeled object masks. Usually created using heimdall.improcessing.gen_movers()
+    time_factor: Multiplier for converting from temporal to spatial units of distance. Values that are too high will make algorithm tend to link distant points that occurred at the same time. Values that are too small will make the algorithm tend to link close points that occurred at very different times.
+    max_dist_percentile: Percentile of nearest neighbor distances to define as too distant to link. Smaller values require that points be closer together to link
+    mem: Temporal distance (number of frames * time_factor) to search for links in path. If None, all points are considered.
+    debug: Whether to produce debugging output during processing. Default is False.
+
+    -----Returns-----
+    A list of heimdall.tracking.Path objects representing the object trajectories in movers'''
+    
     time=0
     coords=[]
     for frame in movers:
@@ -157,6 +186,16 @@ def get_tracks(movers,time_factor:int=10,max_dist_percentile=99,mem=None,debug=F
     return paths
 
 def calibrate_paths(paths,cal_device):
+
+    '''Get cell trajectories transformed to device coordinates from un-calibrated trajectories
+
+    -----Parameters-----
+    paths: A list of heimdall.tracking.Path objects representing the un-calibrated trajectories. Usually produced by heimdall.tracking.get_tracks()
+    cal_device: A heimdall.device.CalibratedDevice object representing the alignment of the device to the video. Usually produced by heimdall.improcessing.detect_ridges()
+
+    -----Returns-----
+    A heimdall.tracking.CalibratedPaths object representing the cell trajectories transformed to device coordinates'''
+    
     #transform paths into a list of lists of coordinates
     paths_arr=[list(p.points) for p in paths]
     for path in paths_arr:
@@ -180,33 +219,89 @@ def calibrate_paths(paths,cal_device):
     return CalibratedPaths(paths_arr,cal_device)
 
 class Point:
+    '''A class for representing the position of a detected object'''
     def __init__(self,coords):
+        '''Create a new Point object
+
+        -----Parameters-----
+        coords: the (y,x,t) coordinates of this object
+
+        -----Returns-----
+        A new Point object'''
+        
         self.coords=coords
         self.forward=None
         self.backward=None
 
     def is_before(self,p:'Point',max_time=None):
+        '''Test if this point occurs before another point
+
+        -----Parameters-----
+        p: The Point object to compare to
+        max_time: The maximum time lag between points, default is None
+
+        -----Returns-----
+        before: True if this Point occured before p, False otherwise. If max_time is not None, this will return False if the points occured more than max_time apart'''
         if max_time:
             if abs(self.coords[2]-p.coords[2])>max_time:
                 return False
         return self.coords[2]<p.coords[2]
 
     def is_after(self,p:'Point',max_time=None):
+        '''Test if this point occurs after another point
+
+        -----Parameters-----
+        p: The Point object to compare to
+        max_time: The maximum time lag between points, default is None
+
+        -----Returns-----
+        after: True if this Point occured after p, False otherwise. If max_time is not None, this will return False if the points occured more than max_time apart'''
+        
         if max_time:
             if abs(self.coords[2]-p.coords[2])>max_time:
                 return False
         return self.coords[2]>p.coords[2]
 
     def set_backward(self,p:'Point'):
+        '''Set the nearest neighbor before this point
+        
+        -----Parameters-----
+        p: The point that is putatively the previous point on the same path
+
+        -----Returns-----
+        None'''
         self.backward=p
 
     def set_forward(self,p:'Point'):
+        '''Set the nearest neighbor after this point
+        
+        -----Parameters-----
+        p: The point that is putatively the next point on the same path
+
+        -----Returns-----
+        None'''
         self.forward=p
 
     def clear_backward(self):
+        '''Clear the nearest neighbor before this point
+
+        -----Parameters-----
+        None
+
+        -----Returns-----
+        None'''
+        
         self.backward=None
 
     def clear_forward(self):
+        '''Clear the nearest neighbor after this point
+
+        -----Parameters-----
+        None
+
+        -----Returns-----
+        None'''
+        
         self.forward=None
 
     def get_dist(self,point):
