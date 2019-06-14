@@ -87,12 +87,20 @@ def get_defl_per_ridge(cal_paths):
         if len(path_coords)<2:
             #We only have one point, move on
             continue
+        if all([p==path_coords[0] for p in path_coords]):
+            #We have multiple copies of the same point
+            continue
         path_linestring=shapely.geometry.LineString(path_coords)
         for r in range(num_ridges):
             if path_linestring.intersects(ridge_offsets[r][0]) and path_linestring.intersects(ridge_offsets[r][1]):
                 #we have data between one offset before and one after this ridge use the last intersecting point upstream and the first downstream to calc deflection
-                upstream=path_linestring.intersection(ridge_offsets[r][0])
-                downstream=path_linestring.intersection(ridge_offsets[r][1])
+                try:
+                    upstream=path_linestring.intersection(ridge_offsets[r][0])
+                    downstream=path_linestring.intersection(ridge_offsets[r][1])
+                except shapely.errors.TopologicalError:
+                    #This (rare) error sometimes occurs when a path is coincident with a ridge offset
+                    print('Ignoring TopologicalError')
+                    continue
                 if type(upstream)!=shapely.geometry.point.Point:
                     upstream=upstream[-1]
                 if type(downstream)!=shapely.geometry.point.Point:
