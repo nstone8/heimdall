@@ -12,8 +12,8 @@ def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num
     -----Parameters-----
     vid_path: File path of the video to be processed
     device: RidgeSpec object representing the geometry of the device in the video
-    cell_size: Nominal size of cells in the video, in microns
-    min_cell_size: Minimum size of cells in the video, in microns. If None, this value defaults to 0.5*cell_size
+    cell_size: Nominal diameter of cells in the video, in microns
+    min_cell_size: Minimum diameter of cells in the video, in microns. If None, this value defaults to 0.5*cell_size
     num_frames: Number of frames of the video stored at vid_path to process. If None, defaults to processing the entire video
     vid_flow_direction: Direction of cell flow in the video stored at vid_path. Must be one of 'up' or 'left' (the default)
     num_bg: Number of frames to use for backgound extraction. If None, defaults to the entire video.
