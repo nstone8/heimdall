@@ -34,8 +34,8 @@ def get_interaction_time(cal_paths,cell_size,in_gutter_rm=True):
             dist_after=max(dists_after)
             if (dist_before>(ridge_sep/2)) and (dist_after>(ridge_sep/2)):
                 #We have coverage on both sides, let's measure
-                #get the first time the cell is within one diameter of the ridge
-                interacting=approaching_this_ridge.loc[approaching_this_ridge.loc[:,'dist_next_ridge']<cell_size,:]
+                #get the first time the cell is within one radius of the ridge
+                interacting=approaching_this_ridge.loc[approaching_this_ridge.loc[:,'dist_next_ridge']<cell_size/2,:]
                 under_ridge=this_path.loc[this_path.loc[:,'under_ridge']==ridge,:]
                 if interacting.shape[0]:
                     time_start=interacting.iloc[0]['t']
