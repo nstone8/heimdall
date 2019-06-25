@@ -35,10 +35,12 @@ def get_interaction_time(cal_paths,cell_size,in_gutter_rm=True):
             if (dist_before>(ridge_sep/2)) and (dist_after>(ridge_sep/2)):
                 #We have coverage on both sides, let's measure
                 #get the first time the cell is within one radius of the ridge
+                time_end=None
                 interacting=approaching_this_ridge.loc[approaching_this_ridge.loc[:,'dist_next_ridge']<cell_size/2,:]
                 under_ridge=this_path.loc[this_path.loc[:,'under_ridge']==ridge,:]
                 if interacting.shape[0]:
                     time_start=interacting.iloc[0]['t']
+                    time_end=interacting.iloc[-1]['t'] #ensure that we at least count all of the time in the interaction area even if the cell never goes under the ridge
                 elif under_ridge.shape[0]>1:
 
                     time_start=under_ridge.iloc[0]['t']
@@ -48,10 +50,11 @@ def get_interaction_time(cal_paths,cell_size,in_gutter_rm=True):
                     under_ridge=pd.DataFrame() #this will force the next if statement to register that we have a time of 0
                 #now find the last time the cell was under the ridge
 
-                if under_ridge.shape[0]<1:
+                if under_ridge.shape[0]<1 and (not time_end):
                     output_frames.append(pd.DataFrame(dict(path=[path],ridge=[ridge],interaction_time=[0])))
                 else:
-                    time_end=under_ridge.iloc[under_ridge.shape[0]-1]['t']
+                    if under_ridge.shape[0]>0:
+                        time_end=under_ridge.iloc[-1]['t']
                     output_frames.append(pd.DataFrame(dict(path=[path],ridge=[ridge],interaction_time=[time_end-time_start])))
 
     return pd.concat(output_frames,ignore_index=True)
