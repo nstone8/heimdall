@@ -262,7 +262,7 @@ def gen_movers(vid:'heimdall.improcessing.VidIterable',bg:np.ndarray,cell_size:i
         diff2=np.abs(frame2-bg)
         binary=diff2>optim_thresh
         frame_count+=1
-        print('thresholded frame',frame_count)
+        print('\rthresholded frame',frame_count,end='')
         #delete small objects
         # labeled_frame=skimage.measure.label(binary)
         # for obj in set(labeled_frame.ravel()):
@@ -276,6 +276,7 @@ def gen_movers(vid:'heimdall.improcessing.VidIterable',bg:np.ndarray,cell_size:i
             fig,ax=plt.subplots()
             ax.imshow(skimage.color.label2rgb(labeled_binary))
             plt.show()
+            print()
             response=input('Press enter to show next frame, q to stop, or anything else to finish\n')
             if response=='q':
                 raise Exception('STOP')

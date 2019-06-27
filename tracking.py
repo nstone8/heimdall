@@ -71,13 +71,15 @@ def get_tracks(movers:'Iterator',time_factor:int=10,max_dist_percentile:float=99
 
     closest_points=[]
     #find closest point forward and backward in time for each point
+    print()
     print('Linking paths')
     points_unprocessed=[Point(c) for c in coords]
     points_unlinked_forward=list(points_unprocessed)
     points_unlinked_backward=list(points_unprocessed)
     points=[]
+    max_display_digits=len(str(len(points_unprocessed)))
     while points_unprocessed:
-        print('Points to link:',len(points_unprocessed))
+        print('\rPoints to link:',len(points_unprocessed),' '*(max_display_digits-1),end='')
         reprocess=False
         p=points_unprocessed.pop(0)
         if not p.forward:
@@ -117,7 +119,7 @@ def get_tracks(movers:'Iterator',time_factor:int=10,max_dist_percentile:float=99
             points.append(p)
         else:
             points_unprocessed.append(p)
-
+    print()
     print('Trimming paths')
     max_dist=np.percentile([c for c in closest_points if c],max_dist_percentile)
     print('max_dist:',max_dist)
@@ -176,7 +178,8 @@ def get_tracks(movers:'Iterator',time_factor:int=10,max_dist_percentile:float=99
             this_point=this_point.forward
         paths.append(this_path)
     if debug:
-        plt.imshow(draw_paths(paths,frame.shape))
+        fig,ax=plt.subplots()
+        ax.imshow(draw_paths(paths,frame.shape))
         plt.show()
     #divide off time factor
     for path in paths:
