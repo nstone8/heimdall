@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import skimage.draw
 
-def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num_frames=None,vid_flow_direction='left',num_bg=None,time_factor=10,max_dist_percentile=99,mem=None,debug=False):
+def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num_frames=None,vid_flow_direction='left',num_bg=None,time_factor=10,max_dist_percentile=99,max_obj_size=None,mem=None,debug=False):
     '''Get calibrated tracks from a video path
 
     -----Parameters-----
@@ -19,6 +19,7 @@ def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num
     num_bg: Number of frames to use for backgound extraction. If None, defaults to the entire video.
     time_factor: Multiplier for converting from temporal to spatial units of distance. Values that are too high will make algorithm tend to link distant points that occurred at the same time. Values that are too small will make the algorithm tend to link close points that occurred at very different times.
     max_dist_percentile: Percentile of nearest neighbor distances to define as too distant to link. Smaller values require that points be closer together to link
+    max_obj_size: Maximum diameter of cells in the video, in microns. If None, there is no upper limit
     mem: Temporal distance (number of frames * time_factor) to search for links in path. If None, all points are considered.
     debug: Whether to produce debugging output during processing. Default is False.
 
@@ -32,17 +33,22 @@ def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num
     if min_cell_size:
         min_cell_size*=cal_device.scale
     movers=imp.gen_movers(vid,bg,cell_size,min_cell_size,debug)
-    tracks=get_tracks(movers,time_factor,max_dist_percentile,mem,debug)
+    if max_obj_size:
+        #model cells as circles
+        max_d_in_pixels=max_obj_size*cal_device.scale
+        max_area_in_pixels=np.pi*((max_d_in_pixels/2)**2)
+    tracks=get_tracks(movers,time_factor,max_dist_percentile,max_area_in_pixels,mem,debug)
     cal_paths=calibrate_paths(tracks,cal_device)
     return cal_paths
 
-def get_tracks(movers:'Iterator',time_factor:int=10,max_dist_percentile:float=99,mem:float=None,debug:bool=False):
+def get_tracks(movers:'Iterator',time_factor:int=10,max_dist_percentile:float=99,max_obj_size=None,mem:float=None,debug:bool=False):
     '''Get tracks from an iterator of labelled masks
 
     -----Parameters-----
     movers: An iterator of labeled object masks. Usually created using heimdall.improcessing.gen_movers()
     time_factor: Multiplier for converting from temporal to spatial units of distance. Values that are too high will make algorithm tend to link distant points that occurred at the same time. Values that are too small will make the algorithm tend to link close points that occurred at very different times.
     max_dist_percentile: Percentile of nearest neighbor distances to define as too distant to link. Smaller values require that points be closer together to link
+    max_obj_size: maximum object size (in pixels) to track if None, arbitrarily large objects are accepted
     mem: Temporal distance (number of frames * time_factor) to search for links in path. If None, all points are considered.
     debug: Whether to produce debugging output during processing. Default is False.
 
@@ -51,15 +57,28 @@ def get_tracks(movers:'Iterator',time_factor:int=10,max_dist_percentile:float=99
     
     time=0
     coords=[]
+    sizes=[]
     for frame in movers:
         objs=[o for o in set(frame.ravel()) if o]
         for obj in objs:
             this_obj_mask=frame==obj
             this_obj_location=imp.get_centroid(this_obj_mask)
             this_obj_coords=(*this_obj_location,time*time_factor)
+            this_obj_size=frame[frame==obj].size
+            sizes.append(this_obj_size)
             coords.append(this_obj_coords)
         time+=1
 
+    if max_obj_size:
+        new_coords=[]
+        new_sizes=[]
+        for this_coords,this_size in zip(coords,sizes):
+            if this_size<max_obj_size:
+                new_coords.append(this_coords)
+                new_sizes.append(this_size)
+        coords=new_coords
+        sizes=new_sizes
+        
     if debug:
         y_coords=[c[0] for c in coords]
         x_coords=[c[1] for c in coords]
@@ -73,7 +92,7 @@ def get_tracks(movers:'Iterator',time_factor:int=10,max_dist_percentile:float=99
     #find closest point forward and backward in time for each point
     print()
     print('Linking paths')
-    points_unprocessed=[Point(c) for c in coords]
+    points_unprocessed=[Point(c,s) for c,s in zip(coords,sizes)]
     points_unlinked_forward=list(points_unprocessed)
     points_unlinked_backward=list(points_unprocessed)
     points=[]
@@ -131,32 +150,6 @@ def get_tracks(movers:'Iterator',time_factor:int=10,max_dist_percentile:float=99
         if p.backward:
             if p.get_dist(p.backward)>max_dist:
                 p.clear_backward()
-
-    #check that each point only has one point registering it as a neighbor in each direction. if we have extras, cut the pair with the highest distance
-    #this section can now probably be deleted (double-pairing can no longer happen during linking)
-    print('Fixing intersecting paths')
-    for p in points:
-        claims_p_before=[point for point in points if point.forward is p]
-        claims_p_after=[point for point in points if point.backward is p]
-        #determine longest 'extra' link and cut it
-
-        if len(claims_p_before)>1:
-            raise Exception('Intersecting Paths!')
-            dists=[p.get_dist(b) for b in claims_p_before]
-            indices=list(range(len(dists)))
-            #keep shortest link
-            del indices[dists.index(min(dists))]
-            for i in indices:
-                claims_p_before[i].clear_forward()
-
-        if len(claims_p_after)>1:
-            raise Exception('Intersecting Paths!')
-            dists=[p.get_dist(a) for a in claims_p_after]
-            indices=list(range(len(dists)))
-            #keep shortest link
-            del indices[dists.index(min(dists))]
-            for i in indices:
-                claims_p_after[i].clear_backward()
 
     #join points into paths
     print('Finalizing')
@@ -223,16 +216,18 @@ def calibrate_paths(paths,cal_device):
 
 class Point:
     '''A class for representing the position of a detected object'''
-    def __init__(self,coords):
+    def __init__(self,coords,size):
         '''Create a new Point object
 
         -----Parameters-----
         coords: the (y,x,t) coordinates of this object
+        size: the size of this object, in pixels
 
         -----Returns-----
         A new Point object'''
         
         self.coords=coords
+        self.size=size
         self.forward=None
         self.backward=None
 
