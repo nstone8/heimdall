@@ -29,6 +29,7 @@ def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num
     vid=imp.VidIterable(vid_path,num_frames=num_frames,vid_flow_direction=vid_flow_direction)
     bg=imp.get_background(vid,num_bg)
     cal_device=imp.detect_ridges(bg,device,debug)
+    #convert arguments in microns to pixels
     cell_size*=cal_device.scale
     if min_cell_size:
         min_cell_size*=cal_device.scale
@@ -37,6 +38,9 @@ def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num
         #model cells as circles
         max_d_in_pixels=max_obj_size*cal_device.scale
         max_area_in_pixels=np.pi*((max_d_in_pixels/2)**2)
+    else:
+        max_area_in_pixels=None
+        
     tracks=get_tracks(movers,time_factor,max_dist_percentile,max_area_in_pixels,mem,debug)
     cal_paths=calibrate_paths(tracks,cal_device)
     return cal_paths
@@ -194,9 +198,15 @@ def calibrate_paths(paths,cal_device):
     
     #transform paths into a list of lists of coordinates
     paths_arr=[list(p.points) for p in paths]
+    #also make new array for sizes
+    sizes_arr=[]
     for path in paths_arr:
+        this_path_sizes=[]
         for i in range(len(path)):
+            this_path_sizes.append(path[i].size)
             path[i]=list(path[i].coords)
+        sizes_arr.append(this_path_sizes)
+            
     for points in paths_arr:
         for p in points:
             #first subtract off offset
@@ -212,7 +222,14 @@ def calibrate_paths(paths,cal_device):
             p[1]/=cal_device.scale
             #now flip y axis to go from image to real coordinates
             p[0]*=-1
-    return CalibratedPaths(paths_arr,cal_device)
+
+    for sizes in sizes_arr:
+        for i in range(len(sizes)):
+            #model cells as circles, convert pixel area to diameter
+            this_diameter_pixels=2*np.sqrt(sizes[i]/np.pi)
+            sizes[i]=this_diameter_pixels/cal_device.scale
+            
+    return CalibratedPaths(paths_arr,sizes_arr,cal_device)
 
 class Point:
     '''A class for representing the position of a detected object'''
@@ -337,22 +354,26 @@ class Path:
         return y_index,x_index
 
 class CalibratedPaths:
-    def __init__(self,paths,cal_device):
+    def __init__(self,paths,sizes,cal_device):
         self.paths=paths
+        self.sizes=sizes
         self.cal_device=cal_device
     def to_df(self)->pd.DataFrame:
         path_frames=[]
         path_no=0
-        for p in self.paths:
+        for i in range(len(self.paths)):
+            #paths and sizes should be the same shape
+            p=self.paths[i]
             x=[point[1] for point in p]
             y=[point[0] for point in p]
             t=[point[2] for point in p]
+            size=[size for size in self.sizes[i]]
             dist_and_next_ridge=[self.cal_device.dist_to_next_ridge(point) for point in p]
             dist_next=[d[0] for d in dist_and_next_ridge]
             next_ridge=[d[1] for d in dist_and_next_ridge]
             under_ridge=[self.cal_device.point_under_ridge(point) for point in p]
             in_gutter=[self.cal_device.point_in_gutter(point) for point in p]
-            path_frames.append(pd.DataFrame(dict(path=[path_no]*len(x),x=x,y=y,t=t,dist_next_ridge=dist_next,next_ridge=next_ridge,under_ridge=under_ridge,in_gutter=in_gutter)))
+            path_frames.append(pd.DataFrame(dict(path=[path_no]*len(x),x=x,y=y,t=t,size=size,dist_next_ridge=dist_next,next_ridge=next_ridge,under_ridge=under_ridge,in_gutter=in_gutter)))
             path_no+=1
         return pd.concat(path_frames,ignore_index=True)
 
