@@ -5,6 +5,8 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 import pandas as pd
 import skimage.draw
+import plotly.offline as py
+import plotly.graph_objs as go
 
 def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num_frames=None,vid_flow_direction='left',num_bg=None,time_factor=10,max_dist_percentile=99,max_obj_size=None,mem=None,debug=False):
     '''Get calibrated tracks from a video path
@@ -406,3 +408,33 @@ def plot_paths(*cal_paths,colors=('b', 'g', 'r', 'c', 'm', 'y', 'k')):
             path_y=[p[0] for p in path]
             ax.plot(path_x,path_y,color)
     plt.show()
+
+def plotly_paths(*path_names:tuple):
+    '''path_names is any number of (paths,name) tuples'''
+    cal_paths=[pn[0] for pn in path_names]
+    #Check for the same device
+    device_num_ridges=([len(p.cal_device.ridge_coords) for p in cal_paths])
+    num_same=min(device_num_ridges)
+    dev=cal_paths[0].cal_device
+    traces=[]
+    device_x=[]
+    device_y=[]
+    for ridge in dev.ridge_coords[0:num_same]:
+        ridge_x=[r[0] for r in ridge+ridge[0:1]]
+        ridge_y=[r[1] for r in ridge+ridge[0:1]]
+        device_x.extend(ridge_x+[None])
+        device_y.extend(ridge_y+[None])
+    traces.append(go.Scatter(x=device_x,y=device_y,name='Device',line=dict(color='black'),mode='lines'),hoverinfo='none')
+
+    for path_group,name in path_names:
+        group_x=[]
+        group_y=[]
+        for path in path_group.paths:
+            path_x=[p[1] for p in path]
+            path_y=[p[0] for p in path]
+            group_x.extend(path_x+[None])
+            group_y.extend(path_y+[None])
+        traces.append(go.Scatter(x=group_x,y=group_y,name=name,mode='lines'),hoverinfo='none')
+    layout=go.Layout(xaxis=dict(zeroline=False),yaxis=dict(zeroline=False))
+    fig=go.Figure(data=traces,layout=layout)
+    py.plot(fig)
