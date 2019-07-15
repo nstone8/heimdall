@@ -424,7 +424,7 @@ def plotly_paths(*path_names:tuple):
         ridge_y=[r[1] for r in ridge+ridge[0:1]]
         device_x.extend(ridge_x+[None])
         device_y.extend(ridge_y+[None])
-    traces.append(go.Scatter(x=device_x,y=device_y,name='Device',line=dict(color='black'),mode='lines'),hoverinfo='none')
+    traces.append(go.Scatter(x=device_x,y=device_y,name='Device',line=dict(color='black'),mode='lines',hoverinfo='none'))
 
     for path_group,name in path_names:
         group_x=[]
@@ -434,7 +434,7 @@ def plotly_paths(*path_names:tuple):
             path_y=[p[0] for p in path]
             group_x.extend(path_x+[None])
             group_y.extend(path_y+[None])
-        traces.append(go.Scatter(x=group_x,y=group_y,name=name,mode='lines'),hoverinfo='none')
+        traces.append(go.Scatter(x=group_x,y=group_y,name=name,mode='lines',hoverinfo='none'))
     layout=go.Layout(xaxis=dict(zeroline=False),yaxis=dict(zeroline=False))
     fig=go.Figure(data=traces,layout=layout)
     py.plot(fig)
