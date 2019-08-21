@@ -30,7 +30,7 @@ def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num
     
     vid=imp.VidIterable(vid_path,num_frames=num_frames,vid_flow_direction=vid_flow_direction)
     bg=imp.get_background(vid,num_bg)
-    cal_device=imp.detect_ridges(bg,device,debug)
+    cal_device=device.detect_ridges(bg,debug)
     #convert arguments in microns to pixels
     cell_size*=cal_device.scale
     if min_cell_size:
