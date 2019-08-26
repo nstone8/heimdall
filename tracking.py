@@ -8,7 +8,7 @@ import skimage.draw
 import plotly.offline as py
 import plotly.graph_objs as go
 
-def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num_frames=None,vid_flow_direction='left',num_bg=None,time_factor=10,max_dist_percentile=99,max_obj_size=None,mem=None,debug=False):
+def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num_frames=None,vid_flow_direction='left',num_bg=None,time_factor=10,max_dist_percentile=99,max_obj_size=None,mem=None,obj_percentile=1,debug=False):
     '''Get calibrated tracks from a video path
 
     -----Parameters-----
@@ -23,14 +23,15 @@ def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num
     max_dist_percentile: Percentile of nearest neighbor distances to define as too distant to link. Smaller values require that points be closer together to link
     max_obj_size: Maximum diameter of cells in the video, in microns. If None, there is no upper limit
     mem: Temporal distance (number of frames * time_factor) to search for links in path. If None, all points are considered.
+    obj_percentile: What percentile of size do we expect the ridges to have in the background image (1 is a good guess)
     debug: Whether to produce debugging output during processing. Default is False.
 
     -----Returns-----
     cal_paths: A heimdall.tracking.CalibratedPaths object representing the paths detected in the video, transformed to device coordinates'''
-    
+
     vid=imp.VidIterable(vid_path,num_frames=num_frames,vid_flow_direction=vid_flow_direction)
     bg=imp.get_background(vid,num_bg)
-    cal_device=device.detect_ridges(bg,debug)
+    cal_device=device.detect_ridges(bg,obj_percentile,debug)
     #convert arguments in microns to pixels
     cell_size*=cal_device.scale
     if min_cell_size:
@@ -42,7 +43,7 @@ def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num
         max_area_in_pixels=np.pi*((max_d_in_pixels/2)**2)
     else:
         max_area_in_pixels=None
-        
+
     tracks=get_tracks(movers,time_factor,max_dist_percentile,max_area_in_pixels,mem,debug)
     cal_paths=calibrate_paths(tracks,cal_device)
     return cal_paths
@@ -60,7 +61,7 @@ def get_tracks(movers:'Iterator',time_factor:int=10,max_dist_percentile:float=99
 
     -----Returns-----
     A list of heimdall.tracking.Path objects representing the object trajectories in movers'''
-    
+
     time=0
     coords=[]
     sizes=[]
@@ -84,7 +85,7 @@ def get_tracks(movers:'Iterator',time_factor:int=10,max_dist_percentile:float=99
                 new_sizes.append(this_size)
         coords=new_coords
         sizes=new_sizes
-        
+
     if debug:
         y_coords=[c[0] for c in coords]
         x_coords=[c[1] for c in coords]
@@ -197,7 +198,7 @@ def calibrate_paths(paths,cal_device):
 
     -----Returns-----
     A heimdall.tracking.CalibratedPaths object representing the cell trajectories transformed to device coordinates'''
-    
+
     #transform paths into a list of lists of coordinates
     paths_arr=[list(p.points) for p in paths]
     #also make new array for sizes
@@ -208,7 +209,7 @@ def calibrate_paths(paths,cal_device):
             this_path_sizes.append(path[i].size)
             path[i]=list(path[i].coords)
         sizes_arr.append(this_path_sizes)
-            
+
     for points in paths_arr:
         for p in points:
             #first subtract off offset
@@ -230,7 +231,7 @@ def calibrate_paths(paths,cal_device):
             #model cells as circles, convert pixel area to diameter
             this_diameter_pixels=2*np.sqrt(sizes[i]/np.pi)
             sizes[i]=this_diameter_pixels/cal_device.scale
-            
+
     return CalibratedPaths(paths_arr,sizes_arr,cal_device)
 
 class Point:
@@ -244,7 +245,7 @@ class Point:
 
         -----Returns-----
         A new Point object'''
-        
+
         self.coords=coords
         self.size=size
         self.forward=None
@@ -273,7 +274,7 @@ class Point:
 
         -----Returns-----
         after: True if this Point occured after p, False otherwise. If max_time is not None, this will return False if the points occured more than max_time apart'''
-        
+
         if max_time:
             if abs(self.coords[2]-p.coords[2])>max_time:
                 return False
@@ -281,7 +282,7 @@ class Point:
 
     def set_backward(self,p:'Point'):
         '''Set the nearest neighbor before this point
-        
+
         -----Parameters-----
         p: The point that is putatively the previous point on the same path
 
@@ -291,7 +292,7 @@ class Point:
 
     def set_forward(self,p:'Point'):
         '''Set the nearest neighbor after this point
-        
+
         -----Parameters-----
         p: The point that is putatively the next point on the same path
 
@@ -307,7 +308,7 @@ class Point:
 
         -----Returns-----
         None'''
-        
+
         self.backward=None
 
     def clear_forward(self):
@@ -318,7 +319,7 @@ class Point:
 
         -----Returns-----
         None'''
-        
+
         self.forward=None
 
     def get_dist(self,point):

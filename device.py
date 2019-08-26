@@ -9,7 +9,7 @@ class RidgeSpec:
     '''Class representing the geometry of devices consisting of regularly spaced, identical angled ridges'''
     def __init__(self,ridge_height:float,ridge_width:float,ridge_spacing:float,ridge_angle:float):
         '''Create a new RidgeSpec object
-        
+
         -----Parameters-----
         ridge_height: The height of the ridges measured perpendicular to the channel
         ridge_width: The width of the ridges measured parallel to the channel
@@ -25,7 +25,7 @@ class RidgeSpec:
 
     def get_mask(self,num_ridge:int,scale:float,tilt:float,offset_y:float,offset_x:float,im_shape:tuple,im_dtype=np.bool):
         '''Get a binary mask showing the ridge geometry transformed into image coordinates
-        
+
         -----Parameters-----
         num_ridge: Number of ridges
         scale: Microns to pixels conversion factor
@@ -37,7 +37,7 @@ class RidgeSpec:
 
         -----Returns-----
         mask: a binary image with the ridge geometry represented by one pixel wide positive lines'''
-        
+
         mask=np.zeros(im_shape,im_dtype)
         all_coords=self.get_ridge_coords(num_ridge,scale,tilt,offset_y,offset_x)
         #generate mask
@@ -48,10 +48,10 @@ class RidgeSpec:
             mask[rr,cc]=True
 
         return mask
-    
+
     def get_ridge_coords(self,num_ridge:int,scale:float,tilt:float,offset_y:float,offset_x:float):
         '''Get the coordinates of the ridge vertices transformed into image coordinates
-        
+
         -----Parameters-----
         num_ridge: Number of ridges
         scale: Microns to pixels conversion factor
@@ -62,7 +62,7 @@ class RidgeSpec:
         -----Returns-----
         all_coords: A list where each entry is a list of tuple coordinates for the vertices of each ridge
         '''
-        
+
         starting_coords=((0,0),(-self.width*scale,0),((-1*scale*self.height/np.tan(self.angle))-self.width*scale,self.height*scale),(-1*scale*self.height/np.tan(self.angle),self.height*scale))
         all_coords_no_tilt_no_trans=[]
         for i in range(num_ridge):
@@ -73,7 +73,7 @@ class RidgeSpec:
         all_coords=[[(x+offset_x,y+offset_y) for x,y in ridge] for ridge in all_coords_no_trans]
         return all_coords
 
-    def detect_ridges(self,background:np.ndarray,debug:bool=False):
+    def detect_ridges(self,background:np.ndarray,obj_percentile=1,debug:bool=False):
         device=self
         '''Detect ridge location in an image
         -----Parameters-----
@@ -104,10 +104,10 @@ class RidgeSpec:
 
         seg=remove_edge_objs(seg)
 
-        filter_small_objs(seg)
+        filter_small_objs(seg,obj_percentile)
 
         optimized_params,corners=find_ridges_in_seg_im(seg,device,ridges_skeleton)
-        
+
         if debug:
             device_mask=device.get_mask(*optimized_params)
             fig,ax=plt.subplots(nrows=2,ncols=2,sharex=True,sharey=True)
@@ -124,9 +124,9 @@ class RidgeSpec:
             plt.show()
 
         return CalibratedDevice(device,*optimized_params[0:-1])
-    
+
 class RidgeSpecSemiGutter(RidgeSpec):
-    def detect_ridges(self,background:np.ndarray,debug:bool=False):
+    def detect_ridges(self,background:np.ndarray,obj_percentile=1,debug:bool=False):
         device=self
         '''Detect ridge location in an image
         -----Parameters-----
@@ -144,7 +144,7 @@ class RidgeSpecSemiGutter(RidgeSpec):
         ridges_skeleton=skimage.morphology.skeletonize(ridges_closed)
         seg=skimage.measure.label(ridges_closed+1,connectivity=1)
         #Find object with max perimeter/area ratio out of objects with perimeters comparable to the image size, should be our ridges
-        
+
         seg_props=skimage.measure.regionprops(seg)
         max_ratio=-1
         max_ratio_label=-1
@@ -190,10 +190,10 @@ class RidgeSpecSemiGutter(RidgeSpec):
         seg=skimage.measure.label(final_bounds+1,connectivity=1)
         seg=remove_edge_objs(seg)
 
-        filter_small_objs(seg)
+        filter_small_objs(seg,obj_percentile)
 
         optimized_params,corners=find_ridges_in_seg_im(seg,device,ridges_skeleton)
-        
+
         if debug:
             device_mask=device.get_mask(*optimized_params)
             fig,ax=plt.subplots(nrows=2,ncols=3,sharex=True,sharey=True)
@@ -215,7 +215,7 @@ class RidgeSpecSemiGutter(RidgeSpec):
 
     def get_mask(self,num_ridge:int,scale:float,tilt:float,offset_y:float,offset_x:float,im_shape:tuple,im_dtype=np.bool):
         '''Get a binary mask showing the ridge geometry transformed into image coordinates
-        
+
         -----Parameters-----
         num_ridge: Number of ridges
         scale: Microns to pixels conversion factor
@@ -227,7 +227,7 @@ class RidgeSpecSemiGutter(RidgeSpec):
 
         -----Returns-----
         mask: a binary image with the ridge geometry represented by one pixel wide positive lines'''
-        
+
         mask=np.zeros(im_shape,im_dtype)
         all_coords=self.get_ridge_coords(num_ridge,scale,tilt,offset_y,offset_x)
         #generate mask
@@ -242,7 +242,7 @@ class RidgeSpecSemiGutter(RidgeSpec):
                 mask[rr,cc]=True
 
         return mask
-    
+
 class CalibratedDevice:
     '''A class representing a sorting device calibrated to a specific video'''
     def __init__(self,ridge_spec:'RidgeSpec',num_ridge:int,scale:float,tilt:float,offset_y:float,offset_x:float):
@@ -257,7 +257,7 @@ class CalibratedDevice:
 
         -----Returns-----
         cal_device: A new CalibratedDevice object'''
-        
+
         print('optimized tilt:',tilt)
         self.num_ridge=num_ridge
         self.scale=scale
@@ -280,7 +280,7 @@ class CalibratedDevice:
 
         -----Returns-----
         The ridge separation for this device along the channel axis'''
-        
+
         return self.ridge_poly[0].distance(self.ridge_poly[1])
 
     def point_under_ridge(self,point:tuple):
@@ -291,7 +291,7 @@ class CalibratedDevice:
 
         -----Returns-----
         ridge: The index of the ridge this point is under or None if this point is not under a ridge'''
-        
+
         point_point=shapely.geometry.Point([point[1],point[0]])
         for i in range(len(self.ridge_poly)):
             if self.ridge_poly[i].contains(point_point):
@@ -300,13 +300,13 @@ class CalibratedDevice:
 
     def dist_to_next_ridge(self,point:tuple)->('dist','ridge_no'):
         '''Get the distance from a point to the next ridge and the identity of that ridge
-        
+
         -----Parameters-----
         point: Tuple containing (y,x) coordinates
 
         -----Returns-----
         dist,ridge_no: Distance dist to the next ridge ridge_no'''
-        
+
         point_point=shapely.geometry.Point([point[1],point[0]])
         ridge_dists=[r.distance(point_point) for r in self.ridge_poly]
         ridge_rings=[ridge.exterior for ridge in self.ridge_poly]
@@ -336,13 +336,13 @@ class CalibratedDevice:
 
     def point_in_gutter(self,point:tuple):
         '''Test if a point is in the gutter
-        
+
         -----Parameters-----
         point: Tuple containing (y,x) coordinates
 
         -----Returns-----
         under_ridge: True if point is in the gutter, False otherwise'''
-        
+
         if (point[0]>self.ridge_coords[0][0][1]) or (point[0]<self.ridge_coords[0][2][1]):
             return True
         else:
@@ -356,7 +356,7 @@ class CalibratedDevice:
 
         -----Returns-----
         out: shapely.LineStrings identical to the long edges of the ridge translated a distance offset upstream from the leading edge and offset downstream from the trailing edge'''
-        
+
         out=[]
         for ridge in self.ridge_coords:
             upstream_vertices=ridge[0:1]+ridge[3:]
@@ -376,7 +376,7 @@ def rotate_point(x,y,angle)->(float,float):
 
     -----Returns-----
     new_x,new_y: Coordinates of point of interest after rotation'''
-    
+
     r=np.sqrt((x**2)+(y**2))
     start_angle=np.arctan2(y,x)
     new_x=r*np.cos(start_angle+angle)
@@ -441,10 +441,10 @@ def remove_edge_objs(im):
     seg=skimage.measure.label(im>0,connectivity=1)
     return im
 
-def filter_small_objs(seg):
+def filter_small_objs(seg,obj_percentile):
     #filter out objects smaller than the ridges
     obj_sizes=[(obj,seg[seg==obj].size) for obj in set(seg.ravel()) if obj>0]
-    max_size=max([obj_s[1] for obj_s in obj_sizes])
+    max_size=np.percentile([obj_s[1] for obj_s in obj_sizes],obj_percentile)
     for obj,size in obj_sizes:
         if size<0.8*max_size:
             #this object is smaller than the ridges, remove from seg
