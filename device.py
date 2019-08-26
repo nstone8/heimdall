@@ -73,7 +73,7 @@ class RidgeSpec:
         all_coords=[[(x+offset_x,y+offset_y) for x,y in ridge] for ridge in all_coords_no_trans]
         return all_coords
 
-    def detect_ridges(self,background:np.ndarray,obj_percentile=1,debug:bool=False):
+    def detect_ridges(self,background:np.ndarray,obj_percentile=100,debug:bool=False):
         device=self
         '''Detect ridge location in an image
         -----Parameters-----
@@ -126,7 +126,7 @@ class RidgeSpec:
         return CalibratedDevice(device,*optimized_params[0:-1])
 
 class RidgeSpecSemiGutter(RidgeSpec):
-    def detect_ridges(self,background:np.ndarray,obj_percentile=1,debug:bool=False):
+    def detect_ridges(self,background:np.ndarray,obj_percentile=100,debug:bool=False):
         device=self
         '''Detect ridge location in an image
         -----Parameters-----

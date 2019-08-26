@@ -8,7 +8,7 @@ import skimage.draw
 import plotly.offline as py
 import plotly.graph_objs as go
 
-def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num_frames=None,vid_flow_direction='left',num_bg=None,time_factor=10,max_dist_percentile=99,max_obj_size=None,mem=None,obj_percentile=1,debug=False):
+def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num_frames=None,vid_flow_direction='left',num_bg=None,time_factor=10,max_dist_percentile=99,max_obj_size=None,mem=None,obj_percentile=100,debug=False):
     '''Get calibrated tracks from a video path
 
     -----Parameters-----
