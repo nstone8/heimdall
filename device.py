@@ -155,7 +155,6 @@ class RidgeSpecSemiGutter(RidgeSpec):
             if this_ratio>max_ratio:
                 max_ratio=this_ratio
                 max_ratio_label=props.label
-        print('area={} perimeter={}'.format(seg_props[max_ratio_label].area,seg_props[max_ratio_label].area))
         bounds=skimage.segmentation.find_boundaries(seg==max_ratio_label)
         #find the channel area
         bounds_seg=skimage.measure.label(bounds+1,connectivity=1)
@@ -453,7 +452,7 @@ def find_ridges_in_seg_im(seg,device,ridges_skeleton):
     #for each ridge, find the two points that are furthest apart, these will be our 'corners'
     #Would probably be faster to first find the point furthest from the centroid, then the point furthest from that point
 
-    corners=[]
+    corners={}
     for ridge in set(seg[seg>0].ravel()):
         #I think the data is in (y,x) order
         this_ridge=np.zeros(seg.shape,seg.dtype)
@@ -478,23 +477,92 @@ def find_ridges_in_seg_im(seg,device,ridges_skeleton):
                 second_corner=b
                 max_dist=this_dist
 
-        corners.append([first_corner,second_corner])
+        corners[ridge]=[first_corner,second_corner]
+    new_corners={}
+    #make the 'top' corner first
+    for r in corners:
+        p1,p2=corners[r]
+        new_corners[r]=([p1 if p1[0]<p2[0] else p2, p2 if p2[0]>p1[0] else p1])
+    corners=new_corners
+    dists=[dist_corners(corners[r][0],corners[r][1]) for r in corners]
+    #stitch together broken ridges
+    close_ridges={}
+    for r1 in corners:
+        these_close_ridges=[]
+        for r2 in corners:
+            this_dist=dist_corners(corners[r1][1],corners[r2][0])
+            if this_dist<0.1*np.max(dists):
+                #these corners might be the same ridge
+                these_close_ridges.append(r2)
+        close_ridges[r1]=these_close_ridges
+        #remove entries in close_ridges with empty values and add those values to new_new_corners
 
-        #calculate ridge slope and reject objects that don't match the ridges
-        abs_slopes=[abs((c[0][0]-c[1][0])/(c[0][1]-c[1][1])) for c in corners]
-        med_slope=np.median(abs_slopes)
-        for i in range(len(corners)):
-            #if the slope is off by more than 20%, can it
-            if (abs_slopes[i]<(0.8*med_slope)) or (abs_slopes[i]>(1.2*med_slope)):
-                del corners[i]
+    new_new_corners=[]
+    new_close_ridges={}
+    for r in close_ridges:
+        if not close_ridges[r]:
+            new_new_corners.append(corners[r])
+        else:
+            new_close_ridges[r]=close_ridges[r]
+    close_ridges=new_close_ridges
+    #for each entry with close corners find the closest and join the ridges
+    ridges_to_join=[]
+    for r1 in close_ridges:
+        closest_ridge=-1
+        closest_dist=float('inf')
+        these_close_ridges=close_ridges[r1]
+        for friend in these_close_ridges:
+            this_dist=dist_corners(corners[r1][1],corners[friend][0])
+            if this_dist<closest_dist:
+                closest_dist=this_dist
+                closest_ridge=friend
+        ridges_to_join.append([r1,closest_ridge])
 
+    #look for 'chains' of ridges to join and consolidate
+    all_chains=set()
+    for to_join in ridges_to_join:
+        this_set=set(to_join)
+        go=True
+        while go:
+            go=False
+            new_this_set=set(this_set)
+            for ridge in this_set:
+                for to_join_2 in ridges_to_join:
+                    if ridge in to_join_2:
+                        new_this_set|=set(to_join_2)
+            if new_this_set != this_set:
+                go=True
+            this_set=new_this_set
+        all_chains|=set([tuple(this_set)])
+    for chain in all_chains:
+        #join up ridges, make them all the same ridge, point with max y is bottom corner, point with min y is top
+        this_ridge=chain[0]
+        this_corner=corners[this_ridge]
+        for other_ridge in chain[1:]:
+            seg[seg==other_ridge]=this_ridge
+            if corners[other_ridge][0][0]<corners[this_ridge][0][0]:
+                this_corner[0]=corners[other_ridge][0]
+            if corners[other_ridge][1][0]>corners[this_ridge][1][0]:
+                this_corner[1]=corners[other_ridge][1]
+        new_new_corners.append(this_corner)
+    corners=new_new_corners
+    
+        
+    #calculate ridge slope and reject objects that don't match the ridges
+    abs_slopes=[abs((c[0][0]-c[1][0])/(c[0][1]-c[1][1])) for c in corners]
+    med_slope=np.median(abs_slopes)
+    new_corners=[]
+    for i in range(len(corners)):
+        #if the slope is off by more than 20%, can it
+        if not ((abs_slopes[i]<(0.8*med_slope)) or (abs_slopes[i]>(1.2*med_slope))):
+            new_corners.append(corners[i])
+    corners=new_corners
 
     #Get 'top' corners and use them to estimate tilt, scale and number of ridges
     top_corners=[]
     for p1,p2 in corners:
         #'top' corner has lower y value
-        top_c=p1 if p1[0]<p2[0] else p2
-        top_corners.append(top_c)
+        top_corners.append(p1)
 
     #fit a line to top corners to estimate tilt
     popt,pcov=scipy.optimize.curve_fit(lambda x,m,b:[m*this_x+b for this_x in x],[p[1] for p in top_corners],[p[0] for p in top_corners],[0,top_corners[0][0]])
@@ -524,10 +592,10 @@ def find_ridges_in_seg_im(seg,device,ridges_skeleton):
 
     #estimate scale factor from known device measurement
     detected_scale=detected_ridge_spacing/device.spacing
-
-    #print('Estimated values:')
-    #print('tilt:{tilt}, spacing:{spacing}, number of ridges:{ridge}, y offset:{y}, x offset:{x}'.format(tilt=detected_tilt,spacing=detected_ridge_spacing,ridge=detected_num_ridges,y=detected_y_offset,x=detected_x_offset))
     optimized_result=maximize_overlap(ridges_skeleton,device,[detected_num_ridges,detected_scale,detected_tilt,detected_y_offset,detected_x_offset,ridges_skeleton.shape])
     #need to add in detected_num_ridges and background.shape as they were not considered in optimization
     optimized_params=[detected_num_ridges,*optimized_result.x,ridges_skeleton.shape]
     return optimized_params,corners
+
+def dist_corners(c1,c2):
+    return np.sqrt(((c1[0]-c2[0])**2)+((c1[1]-c2[1])**2))
