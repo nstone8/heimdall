@@ -485,26 +485,30 @@ def find_ridges_in_seg_im(seg,device,ridges_skeleton):
         new_corners[r]=([p1 if p1[0]<p2[0] else p2, p2 if p2[0]>p1[0] else p1])
     corners=new_corners
     dists=[dist_corners(corners[r][0],corners[r][1]) for r in corners]
+    #find minimum distance between top corners
+    top_corners=[c[0] for c in corners.values()]
+    min_dist=float('inf')
+    for c1 in top_corners:
+        for c2 in top_corners:
+            if c1 is c2:
+                continue
+            if dist_corners(c1,c2)<min_dist:
+                min_dist=dist_corners(c1,c2)
     #stitch together broken ridges
     close_ridges={}
     for r1 in corners:
         these_close_ridges=[]
         for r2 in corners:
+            if r1==r2:
+                continue
             this_dist=dist_corners(corners[r1][1],corners[r2][0])
-            if this_dist<0.1*np.max(dists):
-                #these corners might be the same ridge
-                these_close_ridges.append(r2)
-        close_ridges[r1]=these_close_ridges
-        #remove entries in close_ridges with empty values and add those values to new_new_corners
+            if this_dist<0.5*np.max(dists):
+                #these corners might be the same ridge, check if they're on the same line
+                if dist_line_to_point(corners[r1],corners[r2][0])<(0.5*min_dist):
+                    these_close_ridges.append(r2)
+        if these_close_ridges:
+            close_ridges[r1]=these_close_ridges
 
-    new_new_corners=[]
-    new_close_ridges={}
-    for r in close_ridges:
-        if not close_ridges[r]:
-            new_new_corners.append(corners[r])
-        else:
-            new_close_ridges[r]=close_ridges[r]
-    close_ridges=new_close_ridges
     #for each entry with close corners find the closest and join the ridges
     ridges_to_join=[]
     for r1 in close_ridges:
@@ -533,8 +537,15 @@ def find_ridges_in_seg_im(seg,device,ridges_skeleton):
             if new_this_set != this_set:
                 go=True
             this_set=new_this_set
-        all_chains|=set([tuple(this_set)])
+        all_chains|=set([frozenset(this_set)])
+    in_chain={j for i in all_chains for j in i}
+    #populate new_new_corners with ridges that are not about to be joined
+    new_new_corners=[]
+    for r in corners:
+        if not r in in_chain:
+            new_new_corners.append(corners[r])
     for chain in all_chains:
+        chain=list(chain)
         #join up ridges, make them all the same ridge, point with max y is bottom corner, point with min y is top
         this_ridge=chain[0]
         this_corner=corners[this_ridge]
@@ -546,8 +557,8 @@ def find_ridges_in_seg_im(seg,device,ridges_skeleton):
                 this_corner[1]=corners[other_ridge][1]
         new_new_corners.append(this_corner)
     corners=new_new_corners
-    
-        
+
+
     #calculate ridge slope and reject objects that don't match the ridges
     abs_slopes=[abs((c[0][0]-c[1][0])/(c[0][1]-c[1][1])) for c in corners]
     med_slope=np.median(abs_slopes)
@@ -559,11 +570,7 @@ def find_ridges_in_seg_im(seg,device,ridges_skeleton):
     corners=new_corners
 
     #Get 'top' corners and use them to estimate tilt, scale and number of ridges
-    top_corners=[]
-    for p1,p2 in corners:
-        #'top' corner has lower y value
-        top_corners.append(p1)
-
+    top_corners=[c[0] for c in corners]
     #fit a line to top corners to estimate tilt
     popt,pcov=scipy.optimize.curve_fit(lambda x,m,b:[m*this_x+b for this_x in x],[p[1] for p in top_corners],[p[0] for p in top_corners],[0,top_corners[0][0]])
     detected_slope=popt[0]
@@ -599,3 +606,16 @@ def find_ridges_in_seg_im(seg,device,ridges_skeleton):
 
 def dist_corners(c1,c2):
     return np.sqrt(((c1[0]-c2[0])**2)+((c1[1]-c2[1])**2))
+
+def dist_line_to_point(points_defining_line,point):
+    #find equation of line passing through points_defining_line
+    (y1,x1),(y2,x2)=points_defining_line
+    m=(y1-y2)/(x1-x2)
+    b=y1-m*x1
+    #now define a shapely.linestring that goes from the ridge to the y value of the point
+    yline1=0
+    xline1=(yline1-b)/m
+    yline2=point[0]
+    xline2=(yline2-b)/m
+    line=shapely.geometry.LineString(((xline1,yline1),(xline2,yline2)))
+    return line.distance(shapely.geometry.Point((point[1],point[0])))
