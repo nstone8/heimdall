@@ -1,6 +1,10 @@
 import numpy as np
 import pandas as pd
+import math
 import shapely.geometry
+from plotly import graph_objs as go
+from plotly import offline as py
+from plotly.subplots import make_subplots
 
 def get_interaction_time(cal_paths,cell_size,in_gutter_rm=True):
     paths_frame=cal_paths.to_df()
@@ -65,7 +69,6 @@ def get_defl_per_ridge(cal_paths):
     y_max=max(paths_frame.loc[:,'y'])*1.1
     #get x distance between end of one ridge and beginning of the next
     ridge_sep=cal_paths.cal_device.ridge_coords[0][1][0]-cal_paths.cal_device.ridge_coords[1][0][0]
-    print("ridge_sep:",ridge_sep)
     num_ridges=len(cal_paths.cal_device.ridge_coords)
     def extend_linestring(linestring,y_min,y_max):
         line_coords=linestring.coords
@@ -132,3 +135,93 @@ def get_cumulative_defl(cal_paths):
             this_ridge+=1
             this_ridge_frame=this_path.loc[this_path.loc[:,'ridge']==this_ridge]
     return pd.DataFrame(dict(path=path,ridge=ridge,cumulative_deflection=cum_defl))
+
+def make_boxplot(frames,names,ylabel,column,filename='temp_plot.html'):
+    traces=[]
+    for f,n in zip(frames,names):
+        this_trace=go.Box(x=f.loc[:,'ridge'],y=f.loc[:,column],name=n)
+        traces.append(this_trace)
+    layout=go.Layout(yaxis=dict(title=ylabel),xaxis=dict(title='Ridge'),boxmode='group')
+    fig=go.Figure(data=traces,layout=layout)
+    py.plot(fig,filename=filename)
+
+def plot_interaction_time(*calibrated_paths_and_names,cell_size,in_gutter_rm=True,filename='temp_plot.html'):
+    frames=[]
+    cal_paths=[cn[0] for cn in calibrated_paths_and_names]
+    names=[cn[1] for cn in calibrated_paths_and_names]
+    for c in cal_paths:
+        inter=get_interaction_time(c,cell_size,in_gutter_rm)
+        frames.append(inter)
+    make_boxplot(frames,names,'Interaction Time','interaction_time',filename)
+
+def plot_deflection_per_ridge(*calibrated_paths_and_names,filename='temp_plot.html'):
+    frames=[]
+    cal_paths=[cn[0] for cn in calibrated_paths_and_names]
+    names=[cn[1] for cn in calibrated_paths_and_names]
+    for c in cal_paths:
+        defl=get_defl_per_ridge(c)
+        frames.append(defl)
+    make_boxplot(frames,names,'Deflection (µm)','deflection',filename)
+
+def plot_defl_vs_inter(*calibrated_paths_and_names,cell_size,in_gutter_rm=True,num_col=3,filename='temp_plot.html'):
+    our_colors=[
+    '#1f77b4',  # muted blue
+    '#ff7f0e',  # safety orange
+    '#2ca02c',  # cooked asparagus green
+    '#d62728',  # brick red
+    '#9467bd',  # muted purple
+    '#8c564b',  # chestnut brown
+    '#e377c2',  # raspberry yogurt pink
+    '#7f7f7f',  # middle gray
+    '#bcbd22',  # curry yellow-green
+    '#17becf'   # blue-teal
+    ]
+    if len(our_colors)<len(calibrated_paths_and_names):
+        our_colors*=math.ceil(len(cal_paths)/len(our_colors))
+    cal_paths=[cn[0] for cn in calibrated_paths_and_names]
+    names=[cn[1] for cn in calibrated_paths_and_names]
+    defl=[]
+    inter=[]
+    num_ridges=0
+    for c in cal_paths:
+        this_inter=get_interaction_time(c,cell_size,in_gutter_rm)
+        this_defl=get_defl_per_ridge(c)
+        defl.append(this_defl)
+        inter.append(this_inter)
+        num_ridges_defl=max(this_defl.loc[:,'ridge'])
+        num_ridges_inter=max(this_inter.loc[:,'ridge'])
+        if max(num_ridges_defl,num_ridges_inter)>num_ridges:
+            num_ridges=max(num_ridges_defl,num_ridges_inter)
+    num_plots=num_ridges
+    if num_col>num_plots:
+        num_col=num_plots
+    num_rows=math.ceil(num_plots/num_col)
+    titles=['Ridge {}'.format(r) for r in range(num_plots)]
+    fig=make_subplots(rows=num_rows,cols=num_col,subplot_titles=titles)
+    traces=[]
+    first=True
+    for r in range(num_plots):
+        this_plot_num=r+1
+        this_col=this_plot_num%num_col
+        if num_rows<2:
+            this_col=this_plot_num
+        this_col=this_col if this_col else num_col
+        this_row=((this_plot_num)//num_col)+1
+        if (this_col-1) and (not (this_plot_num%num_col)):
+            this_row-=1
+        for d,i,n,color in zip(defl,inter,names,our_colors):
+            this_ridge_defl=d.loc[d.loc[:,'ridge']==r,:]
+            this_ridge_inter=i.loc[i.loc[:,'ridge']==r,:]
+            this_ridge_defl.set_index(['ridge','path'])
+            this_ridge_inter.set_index(['ridge','path'])
+            all_everything=pd.concat([this_ridge_defl,this_ridge_inter],axis=1)
+            scatter_args=dict(x=all_everything.loc[:,'deflection'],y=all_everything.loc[:,'interaction_time'],name=n,mode='markers',legendgroup=n,marker=dict(color=color))
+            if first:
+                scatter_args['showlegend']=True
+            else:
+                scatter_args['showlegend']=False
+            fig.add_trace(go.Scatter(**scatter_args),row=this_row,col=this_col)
+        first=False
+    fig.update_yaxes(title='Interaction Time')
+    fig.update_xaxes(title='Deflection (µm)')
+    py.plot(fig,filename=filename)

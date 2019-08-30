@@ -484,6 +484,17 @@ def find_ridges_in_seg_im(seg,device,ridges_skeleton):
         p1,p2=corners[r]
         new_corners[r]=([p1 if p1[0]<p2[0] else p2, p2 if p2[0]>p1[0] else p1])
     corners=new_corners
+
+    #calculate ridge slope and reject objects that don't match the ridges
+    abs_slopes=[abs((corners[r][0][0]-corners[r][1][0])/(corners[r][0][1]-corners[r][1][1])) for r in corners]
+    med_slope=np.median(abs_slopes)
+    new_corners={}
+    for r,slope in zip(corners,abs_slopes):
+        #if the slope is off by more than 20%, can it
+        if not ((slope<(0.8*med_slope)) or (slope>(1.2*med_slope))):
+            new_corners[r]=corners[i]
+    corners=new_corners
+
     dists=[dist_corners(corners[r][0],corners[r][1]) for r in corners]
     #find minimum distance between top corners
     top_corners=[c[0] for c in corners.values()]
@@ -557,17 +568,6 @@ def find_ridges_in_seg_im(seg,device,ridges_skeleton):
                 this_corner[1]=corners[other_ridge][1]
         new_new_corners.append(this_corner)
     corners=new_new_corners
-
-
-    #calculate ridge slope and reject objects that don't match the ridges
-    abs_slopes=[abs((c[0][0]-c[1][0])/(c[0][1]-c[1][1])) for c in corners]
-    med_slope=np.median(abs_slopes)
-    new_corners=[]
-    for i in range(len(corners)):
-        #if the slope is off by more than 20%, can it
-        if not ((abs_slopes[i]<(0.8*med_slope)) or (abs_slopes[i]>(1.2*med_slope))):
-            new_corners.append(corners[i])
-    corners=new_corners
 
     #Get 'top' corners and use them to estimate tilt, scale and number of ridges
     top_corners=[c[0] for c in corners]
