@@ -136,34 +136,34 @@ def get_cumulative_defl(cal_paths):
             this_ridge_frame=this_path.loc[this_path.loc[:,'ridge']==this_ridge]
     return pd.DataFrame(dict(path=path,ridge=ridge,cumulative_deflection=cum_defl))
 
-def make_boxplot(frames,names,ylabel,column,filename='temp_plot.html'):
+def make_boxplot(frames,names,ylabel,column,y_scale='linear',filename='temp_plot.html'):
     traces=[]
     for f,n in zip(frames,names):
         this_trace=go.Box(x=f.loc[:,'ridge'],y=f.loc[:,column],name=n)
         traces.append(this_trace)
-    layout=go.Layout(yaxis=dict(title=ylabel),xaxis=dict(title='Ridge'),boxmode='group')
+    layout=go.Layout(yaxis=dict(title=ylabel,type=y_scale,linecolor='black'),xaxis=dict(title='Ridge',linecolor='black'),boxmode='group',plot_bgcolor='white')
     fig=go.Figure(data=traces,layout=layout)
     py.plot(fig,filename=filename)
 
-def plot_interaction_time(*calibrated_paths_and_names,cell_size,in_gutter_rm=True,filename='temp_plot.html'):
+def plot_interaction_time(*calibrated_paths_and_names,cell_size,in_gutter_rm=True,y_scale='linear',filename='temp_plot.html'):
     frames=[]
     cal_paths=[cn[0] for cn in calibrated_paths_and_names]
     names=[cn[1] for cn in calibrated_paths_and_names]
     for c in cal_paths:
         inter=get_interaction_time(c,cell_size,in_gutter_rm)
         frames.append(inter)
-    make_boxplot(frames,names,'Interaction Time','interaction_time',filename)
+    make_boxplot(frames,names,'Interaction Time','interaction_time',y_scale,filename)
 
-def plot_deflection_per_ridge(*calibrated_paths_and_names,filename='temp_plot.html'):
+def plot_deflection_per_ridge(*calibrated_paths_and_names,y_scale='linear',filename='temp_plot.html'):
     frames=[]
     cal_paths=[cn[0] for cn in calibrated_paths_and_names]
     names=[cn[1] for cn in calibrated_paths_and_names]
     for c in cal_paths:
         defl=get_defl_per_ridge(c)
         frames.append(defl)
-    make_boxplot(frames,names,'Deflection (µm)','deflection',filename)
+    make_boxplot(frames,names,'Deflection (µm)','deflection',y_scale,filename)
 
-def plot_defl_vs_inter(*calibrated_paths_and_names,cell_size,in_gutter_rm=True,num_col=3,filename='temp_plot.html'):
+def plot_defl_vs_inter(*calibrated_paths_and_names,cell_size,in_gutter_rm=True,num_col=3,y_scale='linear',x_scale='linear',filename='temp_plot.html'):
     our_colors=[
     '#1f77b4',  # muted blue
     '#ff7f0e',  # safety orange
@@ -222,6 +222,7 @@ def plot_defl_vs_inter(*calibrated_paths_and_names,cell_size,in_gutter_rm=True,n
                 scatter_args['showlegend']=False
             fig.add_trace(go.Scatter(**scatter_args),row=this_row,col=this_col)
         first=False
-    fig.update_yaxes(title='Interaction Time')
-    fig.update_xaxes(title='Deflection (µm)')
+    fig.update_yaxes(title='Interaction Time',type=y_scale,linecolor='black')
+    fig.update_xaxes(title='Deflection (µm)',type=x_scale,linecolor='black')
+    fig.update_layout(plot_bgcolor='white')
     py.plot(fig,filename=filename)
