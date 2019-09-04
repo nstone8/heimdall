@@ -362,6 +362,12 @@ class CalibratedPaths:
         self.sizes=sizes
         self.cal_device=cal_device
     def to_df(self)->pd.DataFrame:
+        try:
+            return self.df
+        except AttributeError:
+            self.df=self.gen_df()
+        return self.df
+    def gen_df(self)->pd.DataFrame:
         path_frames=[]
         path_no=0
         for i in range(len(self.paths)):
