@@ -212,9 +212,9 @@ def plot_defl_vs_inter(*calibrated_paths_and_names,cell_size,in_gutter_rm=True,n
         for d,i,n,color in zip(defl,inter,names,our_colors):
             this_ridge_defl=d.loc[d.loc[:,'ridge']==r,:]
             this_ridge_inter=i.loc[i.loc[:,'ridge']==r,:]
-            this_ridge_defl.set_index(['ridge','path'])
-            this_ridge_inter.set_index(['ridge','path'])
-            all_everything=pd.concat([this_ridge_defl,this_ridge_inter],axis=1)
+            this_ridge_defl=this_ridge_defl.set_index(['ridge','path'])
+            this_ridge_inter=this_ridge_inter.set_index(['ridge','path'])
+            all_everything=pd.concat([this_ridge_defl,this_ridge_inter],axis=1).reset_index()
             scatter_args=dict(x=all_everything.loc[:,'deflection'],y=all_everything.loc[:,'interaction_time'],name=n,mode='markers',legendgroup=n,marker=dict(color=color))
             if first:
                 scatter_args['showlegend']=True
