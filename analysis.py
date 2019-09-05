@@ -177,7 +177,7 @@ def plot_defl_vs_inter(*calibrated_paths_and_names,cell_size,in_gutter_rm=True,n
     '#17becf'   # blue-teal
     ]
     if len(our_colors)<len(calibrated_paths_and_names):
-        our_colors*=math.ceil(len(cal_paths)/len(our_colors))
+        our_colors*=math.ceil(len(calibrated_paths_and_names)/len(our_colors))
     cal_paths=[cn[0] for cn in calibrated_paths_and_names]
     names=[cn[1] for cn in calibrated_paths_and_names]
     defl=[]
