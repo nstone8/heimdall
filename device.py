@@ -237,8 +237,16 @@ class RidgeSpecSemiGutter(RidgeSpec):
             lines_coords.append(skimage.draw.line(ridge_y[0],ridge_x[0],ridge_y[1],ridge_x[1]))
             lines_coords.append(skimage.draw.line(ridge_y[1],ridge_x[1],ridge_y[2],ridge_x[2]))
             lines_coords.append(skimage.draw.line(ridge_y[3],ridge_x[3],ridge_y[0],ridge_x[0]))
+            #trim parts of ridge that fall off the edge of the mask
+            rrr=[]
+            ccc=[]
             for rr,cc in lines_coords:
-                mask[rr,cc]=True
+                for r,c in zip(rr,cc):
+                    if not ((r>=im_shape[0]) or (c>=im_shape[1])):
+                        rrr.extend([r])
+                        ccc.extend([c])
+
+            mask[rrr,ccc]=True
 
         return mask
 
@@ -492,7 +500,7 @@ def find_ridges_in_seg_im(seg,device,ridges_skeleton):
     for r,slope in zip(corners,abs_slopes):
         #if the slope is off by more than 20%, can it
         if not ((slope<(0.8*med_slope)) or (slope>(1.2*med_slope))):
-            new_corners[r]=corners[i]
+            new_corners[r]=corners[r]
     corners=new_corners
 
     dists=[dist_corners(corners[r][0],corners[r][1]) for r in corners]
