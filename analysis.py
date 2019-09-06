@@ -154,7 +154,7 @@ def plot_interaction_time(*calibrated_paths_and_names,cell_size,framerate=None,i
         if framerate:
             inter.loc[:,'interaction_time']=inter.loc[:,'interaction_time']/framerate
         frames.append(inter)
-    make_boxplot(frames,names,'Interaction Time','interaction_time',y_scale,filename)
+    make_boxplot(frames,names,'Interaction Time {}'.format('(s)' if framerate else '(frames)'),'interaction_time',y_scale,filename)
 
 def plot_deflection_per_ridge(*calibrated_paths_and_names,y_scale='linear',filename='temp_plot.html'):
     frames=[]
@@ -226,7 +226,7 @@ def plot_defl_vs_inter(*calibrated_paths_and_names,cell_size,framerate=None,in_g
                 scatter_args['showlegend']=False
             fig.add_trace(go.Scatter(**scatter_args),row=this_row,col=this_col)
         first=False
-    fig.update_yaxes(title='Interaction Time',type=y_scale,linecolor='black')
+    fig.update_yaxes(title='Interaction Time {}'.format('(s)' if framerate else '(frames)'),type=y_scale,linecolor='black')
     fig.update_xaxes(title='Deflection (µm)',type=x_scale,linecolor='black')
     fig.update_layout(plot_bgcolor='white')
     py.plot(fig,filename=filename)
