@@ -145,12 +145,14 @@ def make_boxplot(frames,names,ylabel,column,y_scale='linear',filename='temp_plot
     fig=go.Figure(data=traces,layout=layout)
     py.plot(fig,filename=filename)
 
-def plot_interaction_time(*calibrated_paths_and_names,cell_size,in_gutter_rm=True,y_scale='linear',filename='temp_plot.html'):
+def plot_interaction_time(*calibrated_paths_and_names,cell_size,framerate=None,in_gutter_rm=True,y_scale='linear',filename='temp_plot.html'):
     frames=[]
     cal_paths=[cn[0] for cn in calibrated_paths_and_names]
     names=[cn[1] for cn in calibrated_paths_and_names]
     for c in cal_paths:
         inter=get_interaction_time(c,cell_size,in_gutter_rm)
+        if framerate:
+            inter.loc[:,'interaction_time']=inter.loc[:,'interaction_time']/framerate
         frames.append(inter)
     make_boxplot(frames,names,'Interaction Time','interaction_time',y_scale,filename)
 
@@ -163,7 +165,7 @@ def plot_deflection_per_ridge(*calibrated_paths_and_names,y_scale='linear',filen
         frames.append(defl)
     make_boxplot(frames,names,'Deflection (µm)','deflection',y_scale,filename)
 
-def plot_defl_vs_inter(*calibrated_paths_and_names,cell_size,in_gutter_rm=True,num_col=3,y_scale='linear',x_scale='linear',filename='temp_plot.html'):
+def plot_defl_vs_inter(*calibrated_paths_and_names,cell_size,framerate=None,in_gutter_rm=True,num_col=3,y_scale='linear',x_scale='linear',filename='temp_plot.html'):
     our_colors=[
     '#1f77b4',  # muted blue
     '#ff7f0e',  # safety orange
@@ -185,6 +187,8 @@ def plot_defl_vs_inter(*calibrated_paths_and_names,cell_size,in_gutter_rm=True,n
     num_ridges=0
     for c in cal_paths:
         this_inter=get_interaction_time(c,cell_size,in_gutter_rm)
+        if framerate:
+            this_inter.loc[:,'interaction_time']=this_inter.loc[:,'interaction_time']/framerate
         this_defl=get_defl_per_ridge(c)
         defl.append(this_defl)
         inter.append(this_inter)

@@ -416,7 +416,7 @@ def plot_paths(*cal_paths,colors=('b', 'g', 'r', 'c', 'm', 'y', 'k')):
             ax.plot(path_x,path_y,color)
     plt.show()
 
-def plotly_paths(*path_names:tuple):
+def plotly_paths(*path_names:tuple,filename='temp_plot.html'):
     '''path_names is any number of (paths,name) tuples'''
     cal_paths=[pn[0] for pn in path_names]
     #Check for the same device
@@ -442,6 +442,6 @@ def plotly_paths(*path_names:tuple):
             group_x.extend(path_x+[None])
             group_y.extend(path_y+[None])
         traces.append(go.Scatter(x=group_x,y=group_y,name=name,mode='lines',hoverinfo='none'))
-    layout=go.Layout(xaxis=dict(zeroline=False),yaxis=dict(zeroline=False))
+    layout=go.Layout(xaxis=dict(zeroline=False,color='black'),yaxis=dict(zeroline=False,color='black'),plot_bgcolor='white')
     fig=go.Figure(data=traces,layout=layout)
-    py.plot(fig)
+    py.plot(fig,filename=filename)
