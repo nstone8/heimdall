@@ -105,8 +105,9 @@ class RidgeSpec:
         seg=remove_edge_objs(seg)
 
         filter_small_objs(seg,obj_percentile)
-        skimage.io.imshow(skimage.color.label2rgb(seg))
-        skimage.io.show()
+        if debug:
+            skimage.io.imshow(skimage.color.label2rgb(seg))
+            skimage.io.show()
         optimized_params,corners=find_ridges_in_seg_im(seg,device,ridges_skeleton)
 
         if debug:
@@ -191,8 +192,9 @@ class RidgeSpecSemiGutter(RidgeSpec):
         seg=remove_edge_objs(seg)
 
         filter_small_objs(seg,obj_percentile)
-        skimage.io.imshow(skimage.color.label2rgb(seg))
-        skimage.io.show()
+        if debug:
+            skimage.io.imshow(skimage.color.label2rgb(seg))
+            skimage.io.show()
 
         optimized_params,corners=find_ridges_in_seg_im(seg,device,ridges_skeleton)
 
