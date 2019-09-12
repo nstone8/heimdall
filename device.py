@@ -4,6 +4,7 @@ import shapely.geometry
 import heimdall.improcessing as imp
 import scipy
 from matplotlib import pyplot as plt
+from skimage.morphology import disk
 
 class RidgeSpec:
     '''Class representing the geometry of devices consisting of regularly spaced, identical angled ridges'''
@@ -87,7 +88,7 @@ class RidgeSpec:
         thresh=skimage.filters.threshold_otsu(sobel)
         ridges=sobel>thresh
         #get y,x coordinates of corners
-        ridges_closed=skimage.morphology.binary_closing(ridges)#,disk(10))
+        ridges_closed=skimage.morphology.binary_closing(ridges,disk(2))
         ridges_skeleton=skimage.morphology.skeletonize(ridges_closed)
         seg=skimage.measure.label(ridges_closed+1,connectivity=1)
         #remove all objects touching edges
@@ -101,11 +102,11 @@ class RidgeSpec:
             seg[seg==obj]=0
 
         seg=skimage.measure.label(seg>0,connectivity=1)
-
         seg=remove_edge_objs(seg)
 
         filter_small_objs(seg,obj_percentile)
-
+        skimage.io.imshow(skimage.color.label2rgb(seg))
+        skimage.io.show()
         optimized_params,corners=find_ridges_in_seg_im(seg,device,ridges_skeleton)
 
         if debug:
@@ -140,7 +141,7 @@ class RidgeSpecSemiGutter(RidgeSpec):
         thresh=skimage.filters.threshold_otsu(sobel)
         ridges=sobel>thresh
         #get y,x coordinates of corners
-        ridges_closed=skimage.morphology.binary_closing(ridges)#,disk(10))
+        ridges_closed=skimage.morphology.binary_closing(ridges,disk(2))
         ridges_skeleton=skimage.morphology.skeletonize(ridges_closed)
         seg=skimage.measure.label(ridges_closed+1,connectivity=1)
         #Find object with max perimeter/area ratio out of objects with perimeters comparable to the image size, should be our ridges
@@ -190,6 +191,8 @@ class RidgeSpecSemiGutter(RidgeSpec):
         seg=remove_edge_objs(seg)
 
         filter_small_objs(seg,obj_percentile)
+        skimage.io.imshow(skimage.color.label2rgb(seg))
+        skimage.io.show()
 
         optimized_params,corners=find_ridges_in_seg_im(seg,device,ridges_skeleton)
 
