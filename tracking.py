@@ -8,7 +8,7 @@ import skimage.draw
 import plotly.offline as py
 import plotly.graph_objs as go
 
-def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num_frames=None,vid_flow_direction='left',num_bg=None,time_factor=10,max_dist_percentile=99,max_obj_size=None,mem=None,obj_percentile=100,debug=False):
+def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num_frames=None,vid_flow_direction='left',num_bg=None,time_factor=10,max_dist_percentile=99,max_dist=None,max_obj_size=None,mem=None,obj_percentile=100,debug=False):
     '''Get calibrated tracks from a video path
 
     -----Parameters-----
@@ -44,11 +44,11 @@ def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num
     else:
         max_area_in_pixels=None
 
-    tracks=get_tracks(movers,time_factor,max_dist_percentile,max_area_in_pixels,mem,debug)
+    tracks=get_tracks(movers,time_factor,max_dist_percentile,max_dist,max_area_in_pixels,mem,debug)
     cal_paths=calibrate_paths(tracks,cal_device)
     return cal_paths
 
-def get_tracks(movers:'Iterator',time_factor:int=10,max_dist_percentile:float=99,max_obj_size=None,mem:float=None,debug:bool=False):
+def get_tracks(movers:'Iterator',time_factor:int=10,max_dist_percentile:float=99,max_dist=None,max_obj_size=None,mem:float=None,debug:bool=False):
     '''Get tracks from an iterator of labelled masks
 
     -----Parameters-----
@@ -147,7 +147,8 @@ def get_tracks(movers:'Iterator',time_factor:int=10,max_dist_percentile:float=99
             points_unprocessed.append(p)
     print()
     print('Trimming paths')
-    max_dist=np.percentile([c for c in closest_points if c],max_dist_percentile)
+    if not max_dist:
+        max_dist=np.percentile([c for c in closest_points if c],max_dist_percentile)
     print('max_dist:',max_dist)
     #remove links with dist greater than max_dist
     for p in points:

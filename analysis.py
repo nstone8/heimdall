@@ -192,8 +192,8 @@ def plot_defl_vs_inter(*calibrated_paths_and_names,cell_size,framerate=None,in_g
         this_defl=get_defl_per_ridge(c)
         defl.append(this_defl)
         inter.append(this_inter)
-        num_ridges_defl=max(this_defl.loc[:,'ridge'])
-        num_ridges_inter=max(this_inter.loc[:,'ridge'])
+        num_ridges_defl=max(this_defl.loc[:,'ridge'])+1
+        num_ridges_inter=max(this_inter.loc[:,'ridge'])+1
         if max(num_ridges_defl,num_ridges_inter)>num_ridges:
             num_ridges=max(num_ridges_defl,num_ridges_inter)
     num_plots=num_ridges
