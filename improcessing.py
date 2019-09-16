@@ -177,7 +177,7 @@ class VidIterable:
         -----Parameters-----
         vid_path: File path where the video that this VidIterable will represent is stored
         num_frames: Number of frames from the source video to include in this VidIterable
-        vid_flow_direction: The direction in which cells flow in the video. Should be either 'left' or 'up'. Default is 'left'
+        vid_flow_direction: The direction in which cells flow in the video. Should be either 'left','right' or 'up'. Default is 'left'
         
         -----Returns-----
         vid: A new VidIterable object"""
@@ -202,8 +202,10 @@ class VidIterable:
                 rotate='-vf "transpose=2" '
             elif vid_flow_direction=='left':
                 rotate=''
+            elif vid_flow_direction=='right':
+                rotate='-vf "transpose=2,transpose=2" '
             else:
-                raise Exception("vid_flow_direction must be 'up' or 'left'")
+                raise Exception("vid_flow_direction must be 'up', 'left' or 'right'")
             if num_frames!=None:
                 frames='-frames:v {0} '.format(num_frames)
             else:
