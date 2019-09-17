@@ -144,17 +144,24 @@ def make_boxplot(frames,names,ylabel,column,y_scale='linear',filename='temp_plot
     layout=go.Layout(yaxis=dict(title=ylabel,type=y_scale,linecolor='black'),xaxis=dict(title='Ridge',linecolor='black'),boxmode='group',plot_bgcolor='white')
     fig=go.Figure(data=traces,layout=layout)
     py.plot(fig,filename=filename)
+    return fig
 
 def plot_interaction_time(*calibrated_paths_and_names,cell_size,framerate=None,in_gutter_rm=True,y_scale='linear',filename='temp_plot.html'):
+    have_framerate=True if framerate else False
+    if len(framerate)==1:
+        framerate=[framerate]*len(calibrated_paths_and_names)
+    if len(framerate)!=len(calibrated_paths_and_names):
+        raise Exception('If provided, framerate must be a scalar or an array with length equal to the number of cases to be plotted')
     frames=[]
     cal_paths=[cn[0] for cn in calibrated_paths_and_names]
     names=[cn[1] for cn in calibrated_paths_and_names]
-    for c in cal_paths:
+    for c,f in zip(cal_paths,framerate):
         inter=get_interaction_time(c,cell_size,in_gutter_rm)
-        if framerate:
-            inter.loc[:,'interaction_time']=inter.loc[:,'interaction_time']/framerate
+        if f:
+            inter.loc[:,'interaction_time']=inter.loc[:,'interaction_time']/f
         frames.append(inter)
-    make_boxplot(frames,names,'Interaction Time {}'.format('(s)' if framerate else '(frames)'),'interaction_time',y_scale,filename)
+    fig=make_boxplot(frames,names,'Interaction Time {}'.format('(s)' if have_framerate else '(frames)'),'interaction_time',y_scale,filename)
+    return fig
 
 def plot_deflection_per_ridge(*calibrated_paths_and_names,y_scale='linear',filename='temp_plot.html'):
     frames=[]
@@ -163,7 +170,8 @@ def plot_deflection_per_ridge(*calibrated_paths_and_names,y_scale='linear',filen
     for c in cal_paths:
         defl=get_defl_per_ridge(c)
         frames.append(defl)
-    make_boxplot(frames,names,'Deflection (µm)','deflection',y_scale,filename)
+    fig=make_boxplot(frames,names,'Deflection (µm)','deflection',y_scale,filename)
+    return fig
 
 def plot_defl_vs_inter(*calibrated_paths_and_names,cell_size,framerate=None,in_gutter_rm=True,num_col=3,y_scale='linear',x_scale='linear',filename='temp_plot.html'):
     our_colors=[
@@ -185,10 +193,15 @@ def plot_defl_vs_inter(*calibrated_paths_and_names,cell_size,framerate=None,in_g
     defl=[]
     inter=[]
     num_ridges=0
-    for c in cal_paths:
+    have_framerate=True if framerate else False
+    if len(framerate)==1:
+        framerate=[framerate]*len(calibrated_paths_and_names)
+    if len(framerate)!=len(calibrated_paths_and_names):
+        raise Exception('If provided, framerate must be a scalar or an array with length equal to the number of cases to be plotted')
+    for c,f in zip(cal_paths,framerate):
         this_inter=get_interaction_time(c,cell_size,in_gutter_rm)
-        if framerate:
-            this_inter.loc[:,'interaction_time']=this_inter.loc[:,'interaction_time']/framerate
+        if f:
+            this_inter.loc[:,'interaction_time']=this_inter.loc[:,'interaction_time']/f
         this_defl=get_defl_per_ridge(c)
         defl.append(this_defl)
         inter.append(this_inter)
@@ -226,7 +239,8 @@ def plot_defl_vs_inter(*calibrated_paths_and_names,cell_size,framerate=None,in_g
                 scatter_args['showlegend']=False
             fig.add_trace(go.Scatter(**scatter_args),row=this_row,col=this_col)
         first=False
-    fig.update_yaxes(title='Interaction Time {}'.format('(s)' if framerate else '(frames)'),type=y_scale,linecolor='black')
+    fig.update_yaxes(title='Interaction Time {}'.format('(s)' if have_framerate else '(frames)'),type=y_scale,linecolor='black')
     fig.update_xaxes(title='Deflection (µm)',type=x_scale,linecolor='black')
     fig.update_layout(plot_bgcolor='white')
     py.plot(fig,filename=filename)
+    return fig
