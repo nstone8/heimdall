@@ -148,6 +148,8 @@ def make_boxplot(frames,names,ylabel,column,y_scale='linear',filename='temp_plot
 
 def plot_interaction_time(*calibrated_paths_and_names,cell_size,framerate=None,in_gutter_rm=True,y_scale='linear',filename='temp_plot.html'):
     have_framerate=True if framerate else False
+    if type(framerate)!=list:
+        framerate=[framerate]
     if len(framerate)==1:
         framerate=[framerate]*len(calibrated_paths_and_names)
     if len(framerate)!=len(calibrated_paths_and_names):
@@ -157,7 +159,7 @@ def plot_interaction_time(*calibrated_paths_and_names,cell_size,framerate=None,i
     names=[cn[1] for cn in calibrated_paths_and_names]
     for c,f in zip(cal_paths,framerate):
         inter=get_interaction_time(c,cell_size,in_gutter_rm)
-        if f:
+        if have_framerate:
             inter.loc[:,'interaction_time']=inter.loc[:,'interaction_time']/f
         frames.append(inter)
     fig=make_boxplot(frames,names,'Interaction Time {}'.format('(s)' if have_framerate else '(frames)'),'interaction_time',y_scale,filename)
@@ -194,13 +196,15 @@ def plot_defl_vs_inter(*calibrated_paths_and_names,cell_size,framerate=None,in_g
     inter=[]
     num_ridges=0
     have_framerate=True if framerate else False
+    if type(framerate)!=list:
+        framerate=[framerate]
     if len(framerate)==1:
         framerate=[framerate]*len(calibrated_paths_and_names)
     if len(framerate)!=len(calibrated_paths_and_names):
         raise Exception('If provided, framerate must be a scalar or an array with length equal to the number of cases to be plotted')
     for c,f in zip(cal_paths,framerate):
         this_inter=get_interaction_time(c,cell_size,in_gutter_rm)
-        if f:
+        if have_framerate:
             this_inter.loc[:,'interaction_time']=this_inter.loc[:,'interaction_time']/f
         this_defl=get_defl_per_ridge(c)
         defl.append(this_defl)
