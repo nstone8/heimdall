@@ -7,6 +7,10 @@ import pandas as pd
 import skimage.draw
 import plotly.offline as py
 import plotly.graph_objs as go
+import multiprocessing as mp
+import os
+import heimdall.analysis as an
+import pickle
 
 def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num_frames=None,vid_flow_direction='left',num_bg=None,time_factor=10,max_dist_percentile=99,max_dist=None,max_obj_size=None,mem=None,obj_percentile=100,debug=False):
     '''Get calibrated tracks from a video path
@@ -47,6 +51,28 @@ def calibrated_tracks_from_path(vid_path,device,cell_size,min_cell_size=None,num
     tracks=get_tracks(movers,time_factor,max_dist_percentile,max_dist,max_area_in_pixels,mem,debug)
     cal_paths=calibrate_paths(tracks,cal_device)
     return cal_paths
+
+def _track_wrapper(trackargs):
+    result=calibrated_tracks_from_path(**trackargs)
+    path_name=''.join(trackargs['vid_path'].split('.')[:-1])
+    directory=''.join(path_name.split(os.path.sep)[:-1])
+    name=path_name.split(os.path.sep)[-1]
+    defl=an.get_defl_per_ridge(result)
+    inter=an.get_interaction_time(result,cell_size=trackargs['cell_size'])
+    defl.to_csv(os.path.join(directory,name+'_defl.csv'))
+    inter.to_csv(os.path.join(directory,name+'_inter.csv'))
+    with open(os.path.join(directory,name+'.pickle'),'wb') as save_file:
+        pickle.dump(result,save_file)
+        
+def process_dir(directory,file_extension='.cine',num_cores=None,**trackargs):
+    to_process=[a for a in os.listdir(directory) if file_extension in a]
+    all_args=[{k:trackargs[k] for k in trackargs} for d in to_process]
+    for i in range(len(to_process)):
+        all_args[i]['vid_path']=os.path.join(directory,to_process[i])
+    if not num_cores:
+        num_cores=os.cpu_count()-1
+    with mp.Pool(processes=num_cores) as pool:
+        pool.map(_track_wrapper,all_args)
 
 def get_tracks(movers:'Iterator',time_factor:int=10,max_dist_percentile:float=99,max_dist=None,max_obj_size=None,mem:float=None,debug:bool=False):
     '''Get tracks from an iterator of labelled masks
