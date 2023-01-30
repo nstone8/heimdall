@@ -372,6 +372,8 @@ class Path:
         self.points=[]
     def add_point(self,p:'Point'):
         self.points.append(p)
+        #make sure this list is always in order of increasing time
+        self.points.sort(key=lambda x: x.coords[2])
     def get_path_coords(self)->(tuple,tuple):
         y_index=[]
         x_index=[]
